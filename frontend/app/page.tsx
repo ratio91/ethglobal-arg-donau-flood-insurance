@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import GaugeSelector from '@/components/GaugeSelector';
 import ThresholdConfig from '@/components/ThresholdConfig';
 import PolicyParams from '@/components/PolicyParams';
@@ -13,6 +15,7 @@ type Step = 'intro' | 'gauge' | 'threshold' | 'params' | 'review' | 'success';
 
 export default function Home() {
   const { isConnected } = useAccount();
+  const router = useRouter();
   const [step, setStep] = useState<Step>('intro');
   const [selectedGauge, setSelectedGauge] = useState<GaugeWithLevel | null>(null);
   const [threshold, setThreshold] = useState<number>(0);
@@ -209,8 +212,7 @@ export default function Home() {
                 Policy Created Successfully!
               </h2>
               <p className="text-gray-600 mb-8">
-                Your flood insurance policy has been created on the blockchain. You can view
-                your policies in your wallet.
+                Your flood insurance policy has been created on the blockchain.
               </p>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -223,12 +225,20 @@ export default function Home() {
                 </ul>
               </div>
 
-              <button
-                onClick={handleReset}
-                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-              >
-                Create Another Policy
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleReset}
+                  className="flex-1 py-3 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors font-semibold"
+                >
+                  Create Another Policy
+                </button>
+                <button
+                  onClick={() => router.push('/dashboard')}
+                  className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+                >
+                  View My Policies
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -243,7 +253,12 @@ export default function Home() {
       <header className="border-b bg-white shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-blue-600">🌊 DONAU - dFloodInsurance</h1>
-          <ConnectButton />
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard" className="text-blue-600 hover:text-blue-700 font-medium">
+              My Policies
+            </Link>
+            <ConnectButton />
+          </div>
         </div>
       </header>
 

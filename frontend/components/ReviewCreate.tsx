@@ -90,6 +90,7 @@ export default function ReviewCreate({
           coverageWei,
         ],
         value: premiumWei,
+        gas: BigInt(500000), // Explicit gas limit to avoid estimation issues
       });
 
       addLog('✅ Transaction submitted! Waiting for confirmation...');
