@@ -1,4 +1,4 @@
 {
     "lastUpdated":"2025-11-22T02:10:00.902234",
-    "gaugeStatusList":[{"currentMeasure":{"objectID":"ATFRB00001G000122231","objectName":"Achleiten","value":266.0,"difference":0.0,"measureDate":1763773200000,"fullHour":true},"history":[[1763247600000,254],[1763251200000,255]]}]
+    "gaugeStatusList":[{"currentMeasure":{"objectID":"ATFRB00001G000122231","value":266.0,"measureDate":1763773200000},"history":[[1763247600000,254],[1763251200000,255]]}]
 }

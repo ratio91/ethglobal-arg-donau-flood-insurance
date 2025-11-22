@@ -2,41 +2,23 @@
 pragma solidity ^0.8.25;
 
 import { ERC721 } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-
-interface IWorldID {
-    function verifyProof(
-        uint256 root,
-        uint256 groupId,
-        uint256 signalHash,
-        uint256 nullifierHash,
-        uint256 externalNullifierHash,
-        uint256[8] calldata proof
-    ) external view;
-}
+import { IWeb2Json } from "flare-periphery/src/coston2/IWeb2Json.sol";
 
 interface IFdcVerification {
-    function verifyWeb2Json(bytes memory proof) external view returns (bool);
+    function verifyJsonApi(IWeb2Json.Proof calldata _proof) external payable returns (bool _proved);
 }
 
-// DORIS river gauge data
+// DORIS river gauge data structure - matches the abiSignature from FDC request
 struct DataTransportObject {
-    string objectID;
-    string objectName;
-    int256 value;
-    int256 difference;
-    string measureDate;
-    bool fullHour;
+    string objectID;        // Gauge identifier (e.g., "ATFRB00001G000122231")
+    int256 value;           // Water level in cm (e.g., 266)
+    int256 measureDate;     // Unix timestamp in milliseconds (e.g., 1763773200000)
 }
 
 contract WaterLevelPolicyNFT is ERC721 {
-    
-    IWorldID public worldId;
+
     IFdcVerification public fdcVerification;
-    
-    uint256 public constant GROUP_ID = 1;
-    string public constant ACTION_ID = "create-flood-policy";
-    
+
     uint256 public nextPolicyId;
     uint256 public nextTokenId;
 
@@ -72,16 +54,19 @@ contract WaterLevelPolicyNFT is ERC721 {
     event PolicySettled(uint256 indexed policyId, address indexed beneficiary, uint256 amount);
     event PolicyExpired(uint256 indexed policyId);
 
-    constructor(
-        address _worldId,
-        address _fdcVerification
-    ) ERC721("Flood Insurance", "FLOOD") {
-        worldId = IWorldID(_worldId);
+    constructor(address _fdcVerification) ERC721("Donau Flood Insurance", "DONAU") {
         fdcVerification = IFdcVerification(_fdcVerification);
     }
-
+    
     /**
-     * @notice Create policy (World ID verified)
+     * @notice Create a new flood insurance policy
+     * @param objectID DORIS gauge ID (e.g., "ATFRB00001G000122231")
+     * @param objectName Human-readable gauge name (e.g., "Achleiten")
+     * @param startTimestamp Policy start time
+     * @param expirationTimestamp Policy expiration time
+     * @param waterLevelThreshold Water level in cm that triggers payout
+     * @param coverage Amount insurer will stake and pay if threshold breached
+     * @return policyId The created policy ID
      */
     function createPolicy(
         string memory objectID,
@@ -89,26 +74,13 @@ contract WaterLevelPolicyNFT is ERC721 {
         uint256 startTimestamp,
         uint256 expirationTimestamp,
         int256 waterLevelThreshold,
-        uint256 coverage,
-        uint256 root,
-        uint256 nullifierHash,
-        uint256[8] calldata proof
+        uint256 coverage
     ) external payable returns (uint256) {
         require(msg.value > 0, "No premium");
         require(startTimestamp < expirationTimestamp, "Invalid time");
         require(bytes(objectID).length > 0, "Empty ID");
 
-        // Verify World ID
-        worldId.verifyProof(
-            root,
-            GROUP_ID,
-            abi.encodePacked(msg.sender).hashToField(),
-            nullifierHash,
-            abi.encodePacked(ACTION_ID).hashToField(),
-            proof
-        );
-
-        // Mint NFT
+        // Mint NFT to policyholder
         uint256 nftId = nextTokenId++;
         _mint(msg.sender, nftId);
 
@@ -162,24 +134,40 @@ contract WaterLevelPolicyNFT is ERC721 {
     }
 
     /**
-     * @notice Settle with FDC proof
+     * @notice Settle policy with FDC proof from Flare
+     * @param policyId The policy to settle
+     * @param fdcProof The FDC proof containing verified DORIS water level data
      */
-    function resolvePolicy(uint256 policyId, bytes calldata fdcProof) external {
+    function resolvePolicy(uint256 policyId, IWeb2Json.Proof calldata fdcProof) external payable {
         Policy storage policy = policies[policyId];
         require(policy.status == PolicyStatus.Open, "Not open");
+        require(block.timestamp >= policy.startTimestamp, "Policy not started");
+        require(block.timestamp <= policy.expirationTimestamp, "Policy expired");
 
-        // Verify FDC proof
-        require(fdcVerification.verifyWeb2Json(fdcProof), "Invalid proof");
+        // Verify FDC proof via FdcVerification contract (cross-chain verification)
+        require(fdcVerification.verifyJsonApi{value: msg.value}(fdcProof), "Invalid proof");
 
-        // In production, decode actual proof structure
-        // TODO: Implement actual proof decoding
-        
-        // PAYOUT
+        // Decode DORIS data from the proof
+        DataTransportObject memory dorisData = abi.decode(
+            fdcProof.data.responseBody.abiEncodedData,
+            (DataTransportObject)
+        );
+
+        // Verify the gauge matches the policy
+        require(
+            keccak256(bytes(dorisData.objectID)) == keccak256(bytes(policy.objectID)),
+            "Gauge ID mismatch"
+        );
+
+        // Check if water level exceeded threshold
+        require(dorisData.value >= policy.waterLevelThreshold, "Threshold not breached");
+
+        // PAYOUT to policyholder
         policy.status = PolicyStatus.Settled;
         address beneficiary = ownerOf(policy.policyholderNFT);
-        
+
         _removeFromActiveList(policyId);
-        
+
         _burn(policy.policyholderNFT);
         _burn(policy.insurerNFT);
 
@@ -232,12 +220,3 @@ contract WaterLevelPolicyNFT is ERC721 {
         return activePolicies;
     }
 }
-
-// Helper for hashing
-library ByteHasher {
-    function hashToField(bytes memory value) internal pure returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(value))) >> 8;
-    }
-}
-
-using ByteHasher for bytes;
