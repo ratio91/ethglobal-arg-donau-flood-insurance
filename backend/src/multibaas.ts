@@ -1,11 +1,12 @@
-import { Configuration, ContractsApi, ChainsApi } from '@curvegrid/multibaas-sdk';
+import { Configuration, ContractsApi, ChainsApi, SignerWallet } from '@curvegrid/multibaas-sdk';
+import axios from 'axios';
 import { config } from './config';
 import { Policy } from './types';
 
 // Initialize MultiBaaS SDK
-// Important: Include the chain ID in the basePath
+// BasePath is just /api/v0, chain is passed as parameter to API calls
 const mbConfig = new Configuration({
-  basePath: new URL(`/api/v0/chains/${config.contract.chainId}`, config.multibaas.url).toString(),
+  basePath: new URL('/api/v0', config.multibaas.url).toString(),
   accessToken: config.multibaas.apiKey,
 });
 
@@ -120,7 +121,6 @@ export async function resolvePolicy(policyId: number, fdcProof: any): Promise<st
 
 /**
  * Get current chain status (block number, etc.)
- * Note: The chain is already specified in the Configuration basePath
  */
 export async function getChainStatus(): Promise<any> {
   try {
@@ -128,6 +128,100 @@ export async function getChainStatus(): Promise<any> {
     return result.data.result;
   } catch (error) {
     console.error('❌ Failed to get chain status:', error);
+    return null;
+  }
+}
+
+/**
+ * Get signer wallet from MultiBaas
+ */
+export async function getSignerWallet(walletLabel: string): Promise<SignerWallet | null> {
+  try {
+    // For now, just create a signer wallet reference
+    // MultiBaas will handle the actual wallet lookup when signing
+    return {
+      walletName: walletLabel,
+    } as SignerWallet;
+  } catch (error) {
+    console.error(`❌ Failed to get signer wallet ${walletLabel}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Claim a policy as insurer using MultiBaas cloud wallet
+ */
+export async function claimPolicyAsInsurer(policyId: number, coverage: string, walletLabel: string): Promise<string | null> {
+  try {
+    console.log(`💰 Claiming policy ${policyId} as insurer with coverage ${coverage}...`);
+
+    // Use wallet address from config for both from and signer
+    const walletAddress = config.insurer.walletAddress;
+
+    console.log(`🔍 DEBUG - walletAddress from config:`, walletAddress);
+    console.log(`🔍 DEBUG - typeof walletAddress:`, typeof walletAddress);
+
+    console.log(`📝 Request params:`, {
+      contractAddress: config.contract.address,
+      contractLabel: config.contract.label,
+      function: 'claimPolicy',
+      args: [policyId.toString()],
+      value: coverage,
+      from: walletAddress,
+      signer: walletAddress,
+    });
+
+    const methodArgs = {
+      args: [policyId.toString()],
+      value: coverage,
+      contractOverride: false,
+      from: walletAddress, // Wallet address to send transaction from
+      signer: walletAddress, // Wallet address that will sign the transaction
+    };
+
+    console.log(`🔍 DEBUG - methodArgs object:`, JSON.stringify(methodArgs, null, 2));
+
+    const result = await contractsApi.callContractFunction(
+      config.contract.address,
+      config.contract.label,
+      'claimPolicy',
+      methodArgs
+    );
+
+    console.log('✅ Claim policy result:', JSON.stringify(result.data, null, 2));
+
+    // Check if this is a transaction that needs signing
+    const resultData = result.data.result as any;
+    if (resultData.tx) {
+      const txHash = resultData.tx.hash;
+      console.log(`📝 Transaction hash: ${txHash}`);
+      return txHash;
+    }
+
+    return 'success';
+  } catch (error: any) {
+    console.error(`❌ ========== CLAIM POLICY ${policyId} ERROR ========== `);
+    console.error(`Error type: ${error?.constructor?.name}`);
+    console.error(`Error message: ${error?.message}`);
+
+    if (error?.response) {
+      console.error(`Response status: ${error.response.status}`);
+      console.error(`Response statusText: ${error.response.statusText}`);
+      console.error(`Response data:`, JSON.stringify(error.response.data, null, 2));
+      console.error(`Response headers:`, JSON.stringify(error.response.headers, null, 2));
+    }
+
+    if (error?.request) {
+      console.error(`Request details:`, {
+        method: error.request.method,
+        path: error.request.path,
+        host: error.request.host,
+      });
+    }
+
+    console.error(`Full error object:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    console.error(`❌ ========== END ERROR ========== `);
+
     return null;
   }
 }

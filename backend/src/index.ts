@@ -1,5 +1,6 @@
 import { app, monitorAndSubmit, checkPendingAndSettle } from './app';
 import { config } from './config';
+import { monitorAndClaimPolicies } from './insurer';
 
 console.log('🚀 Starting Flood Insurance Backend...');
 
@@ -37,6 +38,14 @@ app.listen(config.server.port, () => {
   // Run once immediately on startup (after 5 seconds)
   console.log('⏰ First monitoring cycle will run in 5 seconds...\n');
   setTimeout(runMonitoringCycle, 5000);
+
+  // Start insurer monitor if enabled
+  if (config.insurer.autoClaimEnabled) {
+    console.log('🏦 Starting automatic insurer...');
+    monitorAndClaimPolicies();
+  } else {
+    console.log('⏸️  Automatic insurer disabled (AUTO_CLAIM_ENABLED=false)');
+  }
 });
 
 // Graceful shutdown
