@@ -3,7 +3,7 @@ pragma solidity ^0.8.25;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import "../src/floodInsurance/WaterLevelPolicyNFT.sol";
+import "../src/WaterLevelPolicyNFT.sol";
 import "./mocks/MockFdcVerification.sol";
 import { IWeb2Json } from "flare-periphery/src/coston2/IWeb2Json.sol";
 
@@ -31,8 +31,7 @@ contract WaterLevelPolicyNFTTest is Test {
     event PolicyExpired(uint256 indexed policyId);
 
     function setUp() public {
-        mockFdc = new MockFdcVerification();
-        policyContract = new WaterLevelPolicyNFT(address(mockFdc));
+        policyContract = new WaterLevelPolicyNFT();
 
         startTime = block.timestamp + 1 days;
         endTime = startTime + 30 days;
