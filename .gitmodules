@@ -1,0 +1,3 @@
+[submodule "lib/forge-multibaas"]
+	path = lib/forge-multibaas
+	url = https://github.com/curvegrid/forge-multibaas
