@@ -1,0 +1,226 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.25;
+
+import { Script } from "forge-std/Script.sol";
+import { Vm } from "dependencies/forge-std-1.9.5/src/Vm.sol";
+import { Strings } from "@openzeppelin-contracts/utils/Strings.sol";
+import { Base as FdcBase } from "../script/fdcExample/Base.s.sol";
+import { Base as StringsBase } from "../src/utils/fdcStrings/Base.sol";
+import { IWeb2Json } from "flare-periphery/src/coston2/IWeb2Json.sol";
+import { WaterLevelAgency } from "../src/floodInsurance/WaterLevelAgency.sol";
+import { ContractRegistry } from "flare-periphery/src/coston2/ContractRegistry.sol";
+import { IFdcVerification } from "flare-periphery/src/coston2/IFdcVerification.sol";
+
+string constant dirPath = "data/floodInsurance/waterLevel/";
+string constant attestationTypeName = "Web2Json";
+
+address constant VM_ADDRESS = address(uint160(uint256(keccak256("hevm cheat code"))));
+Vm constant vm = Vm(VM_ADDRESS);
+
+function _getAgency() view returns (WaterLevelAgency) { 
+    string memory filePath = string.concat(dirPath, "_agencyAddress.txt");
+    require(vm.exists(filePath), "Config file not found. Please run DeployAgency script first.");
+
+    address agencyAddress = vm.parseAddress(vm.readFile(filePath));
+    require(agencyAddress != address(0), "Failed to read a valid agency address from config file.");
+    return WaterLevelAgency(agencyAddress);
+}
+
+//      forge script script/WaterLevel.s.sol:DeployAgency --rpc-url $COSTON2_RPC_URL --broadcast
+contract DeployAgency is Script {
+    function run() external {
+        vm.createDir(dirPath, true);
+
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(deployerPrivateKey);
+        WaterLevelAgency agency = new WaterLevelAgency(); 
+        vm.stopBroadcast();
+
+        string memory filePath = string.concat(dirPath, "_agencyAddress.txt");
+        vm.writeFile(filePath, vm.toString(address(agency)));
+    }
+}
+
+//      forge script script/WaterLevel.s.sol:CreatePolicy --rpc-url $COSTON2_RPC_URL --broadcast
+contract CreatePolicy is Script {
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        WaterLevelAgency agency = _getAgency(); 
+
+        // User must specify the gauge they want to monitor       
+        string memory objectID = "ATKBG00001G000619415"; // Hardcoded example - Korneuburg gauge
+        string memory objectName = "Korneuburg";
+
+        uint256 startOffset = 120; // Starts in 2 minutes
+        uint256 duration = 60 * 60; // Lasts 1 hour
+        uint256 waterLevelThreshold = 300000000;
+        // Payout if water level exceeds threshold (flood insurance)
+        uint256 premium = 0.01 ether;
+        uint256 coverage = 0.1 ether;
+        uint256 startTimestamp = block.timestamp + startOffset;
+        uint256 expirationTimestamp = startTimestamp + duration;
+
+        vm.startBroadcast(deployerPrivateKey);
+        agency.createPolicy{ value: premium }(
+            objectID, 
+            objectName,
+            startTimestamp,
+            expirationTimestamp,
+            waterLevelThreshold,
+            coverage
+        );
+        vm.stopBroadcast();
+    }
+}
+
+// solhint-disable-next-line max-line-length
+//      forge script script/WaterLevel.s.sol:ClaimPolicy --rpc-url $COSTON2_RPC_URL --broadcast --sig "run(uint256)" <POLICY_ID>
+contract ClaimPolicy is Script {
+    function run(uint256 policyId) external {
+        uint256 insurerPrivateKey = vm.envUint("PRIVATE_KEY");
+        WaterLevelAgency agency = _getAgency(); 
+        WaterLevelAgency.Policy memory policy = agency.getPolicy(policyId); 
+        require(policy.status == WaterLevelAgency.PolicyStatus.Unclaimed, "Policy already claimed or settled"); 
+
+        vm.startBroadcast(insurerPrivateKey);
+        agency.claimPolicy{ value: policy.coverage }(policyId);
+        vm.stopBroadcast();
+    }
+}
+
+// STEP 1: Prepare the FDC request and save it to a file.
+// solhint-disable-next-line max-line-length
+//      forge script script/WaterLevel.s.sol:PrepareResolveRequest --rpc-url $COSTON2_RPC_URL --broadcast --ffi --sig "run(uint256)" <POLICY_ID>
+contract PrepareResolveRequest is Script {
+    function run(uint256 policyId) external {
+        WaterLevelAgency agency = _getAgency(); 
+        WaterLevelAgency.Policy memory policy = agency.getPolicy(policyId); 
+
+        bytes memory abiEncodedRequest = _prepareFdcRequest(policy.objectID); 
+
+        FdcBase.writeToFile(dirPath, "_resolve_request.txt", StringsBase.toHexString(abiEncodedRequest), true);
+    }
+
+    function _prepareFdcRequest(string memory objectID) private returns (bytes memory) { 
+        string memory requestBody = _prepareApiRequestBody(objectID); 
+        string memory url = string.concat(vm.envString("WEB2JSON_VERIFIER_URL_TESTNET"), "Web2Json/prepareRequest");
+
+        (string[] memory headers, string memory body) = FdcBase.prepareAttestationRequest(
+            FdcBase.toUtf8HexString(attestationTypeName),
+            FdcBase.toUtf8HexString("PublicWeb2"),
+            requestBody
+        );
+
+        (, bytes memory data) = FdcBase.postAttestationRequest(url, headers, body);
+
+        FdcBase.AttestationResponse memory response = FdcBase.parseAttestationRequest(data);
+        require(response.abiEncodedRequest.length > 0, "Verifier returned empty request");
+        return response.abiEncodedRequest;
+    }
+
+    function _prepareApiRequestBody(string memory objectID) private view returns (string memory) { 
+        string memory partnerKey = vm.envString("DORIS_PARTNER_KEY"); 
+        require(bytes(partnerKey).length > 0, "DORIS_PARTNER_KEY not set in .env");
+
+        string memory queryParams = string.concat(
+            "{\\'VIADONAU_PARTNER_KEY\\':\\'",
+            partnerKey,
+            "\\'}"
+        );
+
+        string memory postProcessJq = string.concat(
+            "{objectID: (.gaugeStatusList[] | select(.currentMeasure.objectID == \\'",
+            objectID,
+            "\\') | .currentMeasure.objectID),",
+            "objectName: (.gaugeStatusList[] | select(.currentMeasure.objectID == \\'",
+            objectID,
+            "\\') | .currentMeasure.value | if . != null then . * 1000000 else 0 end | floor),",
+            "difference: (.gaugeStatusList[] | select(.currentMeasure.objectID == \\'",
+            objectID,
+            "\\') | .currentMeasure.measureDate),",
+            "fullHour: (.gaugeStatusList[] | select(.currentMeasure.objectID == \\'",
+            objectID,
+            "\\') | .currentMeasure.fullHour)}"
+        );
+        
+        string memory abiSignature = 
+            // solhint-disable-next-line max-line-length
+            "{\\'components\\':[{\\'internalType\\':\\'string\\',\\'name\\':\\'objectID\\',\\'type\\':\\'string\\'},{\\'internalType\\':\\'string\\',\\'name\\':\\'objectName\\',\\'type\\':\\'string\\'},{\\'internalType\\':\\'int256\\',\\'name\\':\\'value\\',\\'type\\':\\'int256\\'},{\\'internalType\\':\\'int256\\',\\'name\\':\\'difference\\',\\'type\\':\\'int256\\'},{\\'internalType\\':\\'string\\',\\'name\\':\\'measureDate\\',\\'type\\':\\'string\\'},{\\'internalType\\':\\'bool\\',\\'name\\':\\'fullHour\\',\\'type\\':\\'bool\\'}],\\'name\\':\\'dto\\',\\'type\\':\\'tuple\\'}";
+
+        return
+            string.concat(
+                "{'url':'https://opendata2.doris-info.at/doris/api/1.0/gauge/getStatus',",
+                "'httpMethod':'GET','headers':'{}','queryParams':'",
+                queryParams,
+                "','body':'{}','postProcessJq':'",
+                postProcessJq,
+                "','abiSignature':'",
+                abiSignature,
+                "'}"
+            );
+    }
+}
+
+// STEP 2: Submit the request to the FDC and save the round ID.
+//      forge script script/WaterLevel.s.sol:SubmitResolveRequest --rpc-url $COSTON2_RPC_URL --broadcast
+contract SubmitResolveRequest is Script {
+    function run() external {
+        string memory requestHex = vm.readFile(string.concat(dirPath, "_resolve_request.txt"));
+        bytes memory abiEncodedRequest = vm.parseBytes(requestHex);
+
+        uint256 submissionTimestamp = FdcBase.submitAttestationRequest(abiEncodedRequest);
+        uint256 submissionRoundId = FdcBase.calculateRoundId(submissionTimestamp);
+
+        FdcBase.writeToFile(dirPath, "_resolve_roundId.txt", Strings.toString(submissionRoundId), true);
+    }
+}
+
+// STEP 3: Wait for finalization, retrieve the proof, and resolve the policy.
+// solhint-disable-next-line max-line-length
+//      forge script script/WaterLevel.s.sol:ExecuteResolve --rpc-url $COSTON2_RPC_URL --broadcast --ffi --sig "run(uint256)" <POLICY_ID>
+contract ExecuteResolve is Script {
+    function run(uint256 policyId) external {
+        string memory requestHex = vm.readFile(string.concat(dirPath, "_resolve_request.txt"));
+        string memory roundIdStr = vm.readFile(string.concat(dirPath, "_resolve_roundId.txt"));
+        uint256 submissionRoundId = FdcBase.stringToUint(roundIdStr);
+
+        IFdcVerification fdcVerification = ContractRegistry.getFdcVerification();
+        uint8 protocolId = fdcVerification.fdcProtocolId();
+
+        bytes memory proofData = FdcBase.retrieveProof(protocolId, requestHex, submissionRoundId);
+
+        WaterLevelAgency agency = _getAgency(); 
+        FdcBase.ParsableProof memory parsableProof = abi.decode(proofData, (FdcBase.ParsableProof));
+        IWeb2Json.Response memory proofResponse = abi.decode(parsableProof.responseHex, (IWeb2Json.Response));
+        IWeb2Json.Proof memory finalProof = IWeb2Json.Proof(parsableProof.proofs, proofResponse);
+
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(privateKey);
+        agency.resolvePolicy(policyId, finalProof);
+        vm.stopBroadcast();
+    }
+}
+
+// solhint-disable-next-line max-line-length
+//      forge script script/WaterLevel.s.sol:ExpirePolicy --rpc-url $COSTON2_RPC_URL --broadcast --sig "run(uint256)" <POLICY_ID>
+contract ExpirePolicy is Script {
+    function run(uint256 policyId) external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        WaterLevelAgency agency = _getAgency();
+        vm.startBroadcast(deployerPrivateKey);
+        agency.expirePolicy(policyId);
+        vm.stopBroadcast();
+    }
+}
+
+// solhint-disable-next-line max-line-length
+//      forge script script/WaterLevel.s.sol:RetireUnclaimedPolicy --rpc-url $COSTON2_RPC_URL --broadcast --sig "run(uint256)" <POLICY_ID>
+contract RetireUnclaimedPolicy is Script {
+    function run(uint256 policyId) external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        WaterLevelAgency agency = _getAgency();
+        vm.startBroadcast(deployerPrivateKey);
+        agency.retireUnclaimedPolicy(policyId);
+        vm.stopBroadcast();
+    }
+}
