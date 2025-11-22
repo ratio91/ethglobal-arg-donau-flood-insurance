@@ -3,7 +3,7 @@ solc-version = "0.8.25"
 evm_version = "shanghai"
 src = "src"
 out = "out"
-libs = ["dependencies"]
+libs = ["lib"]
 fs_permissions = [{ access = "read-write", path = "./" }]
 viaIR = true
 
