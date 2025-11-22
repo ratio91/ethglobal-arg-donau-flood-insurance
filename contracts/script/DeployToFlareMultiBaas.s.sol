@@ -3,9 +3,7 @@ pragma solidity ^0.8.25;
 
 import "forge-std/Script.sol";
 import {MultiBaas} from "forge-multibaas/MultiBaas.sol";
-import "../src/floodInsurance/WaterLevelPolicyNFT.sol";
-import "../src/crossChainFdc/FdcVerification.sol";
-import "../src/crossChainFdc/AddressUpdater.sol";
+import "../src/WaterLevelPolicyNFT.sol";
 
 contract DeployToFlareMultiBaas is Script {
     function run() external {
@@ -17,14 +15,8 @@ contract DeployToFlareMultiBaas is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // Deploy infrastructure contracts
-        AddressUpdater addressUpdater = new AddressUpdater(deployer);
-        console.log("AddressUpdater deployed at:", address(addressUpdater));
-
-        FdcVerification fdcVerification = new FdcVerification(address(addressUpdater), 1);
-        console.log("FdcVerification deployed at:", address(fdcVerification));
-
-        WaterLevelPolicyNFT policyNFT = new WaterLevelPolicyNFT(address(fdcVerification));
+        // Deploy contract
+        WaterLevelPolicyNFT policyNFT = new WaterLevelPolicyNFT();
         console.log("WaterLevelPolicyNFT deployed at:", address(policyNFT));
 
         // Link to MultiBaas with event syncing from 100 blocks ago
@@ -41,8 +33,6 @@ contract DeployToFlareMultiBaas is Script {
         vm.stopBroadcast();
 
         console.log("\n=== Deployment Complete ===");
-        console.log("AddressUpdater:", address(addressUpdater));
-        console.log("FdcVerification:", address(fdcVerification));
         console.log("WaterLevelPolicyNFT:", address(policyNFT));
         console.log("\nCheck MultiBaas dashboard for 'water-level-policy' contract");
     }

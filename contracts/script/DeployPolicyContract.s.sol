@@ -3,23 +3,17 @@ pragma solidity ^0.8.25;
 
 import { Script } from "forge-std/Script.sol";
 import { console } from "forge-std/console.sol";
-import "../src/floodInsurance/WaterLevelPolicyNFT.sol";
+import "../src/WaterLevelPolicyNFT.sol";
 
 contract DeployPolicyContract is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        
-        // Read from deployed-world.txt or .env
-        address fdcVerification = vm.envAddress("FDC_VERIFICATION_WORLD");
 
         console.log("Deploying WaterLevelPolicyNFT...");
-        console.log("FdcVerification:", fdcVerification);
 
         vm.startBroadcast(deployerPrivateKey);
 
-        WaterLevelPolicyNFT policy = new WaterLevelPolicyNFT(
-            fdcVerification
-        );
+        WaterLevelPolicyNFT policy = new WaterLevelPolicyNFT();
 
         vm.stopBroadcast();
 
