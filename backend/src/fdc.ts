@@ -142,8 +142,9 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
   try {
     console.log(`🔧 [STEP 1] Preparing FDC request for gauge: ${objectID}`);
 
-    const attestationType = toHex('Web2Json');
-    const sourceId = toHex('PublicWeb2');
+    // Attestation type and source ID must match what the verifier expects
+    const attestationType = toHex('IJsonApi');  // NOT 'Web2Json'!
+    const sourceId = toHex('WEB2');             // NOT 'PublicWeb2'!
 
     // Fixed endpoint: /JsonApi/prepareRequest (from OpenAPI spec)
     const url = `${VERIFIER_API}/JsonApi/prepareRequest`;
@@ -535,8 +536,8 @@ async function createMockProof(roundId: number, objectID?: string): Promise<FdcP
   return {
     status: 'VALID',
     data: {
-      attestationType: toHex('Web2Json'),
-      sourceId: toHex('PublicWeb2'),
+      attestationType: toHex('IJsonApi'),  // Match real attestation type
+      sourceId: toHex('WEB2'),             // Match real source ID
       votingRound: roundId,
       lowestUsedTimestamp: Math.floor(Date.now() / 1000),
       responseBody: {
