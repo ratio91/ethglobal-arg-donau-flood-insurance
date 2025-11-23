@@ -269,6 +269,36 @@ USE_MOCK_FDC=false npm run fdc:test
 2. Verify internet connectivity
 3. Try: `curl https://fdc-verifiers-testnet.flare.network/`
 
+### Error: "Verifier returns INVALID status"
+
+**Symptoms:**
+```
+❌ FDC prepare failed with status: INVALID
+   Full response: { status: 'INVALID', ... }
+```
+
+**Known Issue with DORIS API:**
+The DORIS API (Austrian government water level data at `opendata2.doris-info.at`) returns "Access denied" when called from Flare's verifier servers, even though it works from other locations. This is likely due to IP whitelisting or geographical restrictions on the DORIS API.
+
+**Solution:**
+1. **Use Mock Mode** (recommended for testing/demo):
+   ```bash
+   USE_MOCK_FDC=true npm run fdc:test
+   ```
+   This bypasses the DORIS API and creates mock proofs that still demonstrate the on-chain submission workflow.
+
+2. **Use Alternative Data Source**:
+   Find a publicly accessible water level API that doesn't have IP restrictions. Update the `dataSource.url` in `backend/src/fdc.ts`.
+
+3. **Contact DORIS**:
+   Request IP whitelisting for Flare's verifier servers (IPs would need to be obtained from Flare team).
+
+4. **Verify the issue**:
+   ```bash
+   # This will likely fail with "Access denied"
+   curl "https://opendata2.doris-info.at/doris/api/1.0/gauge/getStatus?VIADONAU_PARTNER_KEY=opendata"
+   ```
+
 ## 🎯 Next Steps
 
 1. **Register FdcHub**: Follow Step 1 above to register in MultiBaas UI (one-time setup)

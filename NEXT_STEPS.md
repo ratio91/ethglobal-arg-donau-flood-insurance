@@ -230,16 +230,27 @@ After following the steps above, you should have:
 
 The FDC integration is now **COMPLETE** and submits **ON-CHAIN** to the FdcHub contract!
 
+### ⚠️ Known Issue: DORIS API Access
+
+The DORIS API (Austrian government water level data) is currently returning "Access denied" when called from Flare's verifier servers, even though it works from other locations. This is likely due to IP whitelisting or geographical restrictions.
+
+**Impact**: The verifier returns `INVALID` status when preparing FDC requests using real DORIS data.
+
+**Workarounds**:
+1. **Use Mock Mode for Demo**: Set `USE_MOCK_FDC=true` in `.env` - this bypasses the DORIS API and creates mock proofs
+2. **Alternative Data Source**: Use a different publicly accessible water level API
+3. **Contact DORIS**: Request IP whitelisting for Flare verifier IPs
+
 **What you need to do:**
-1. Register FdcHub in MultiBaas UI (one-time - see Step 2 above)
+1. ✅ FdcHub registered in MultiBaas UI (label: `fdchub11`)
 2. Run `npm install` in backend
-3. Test with `npm run fdc:test`
-4. Verify transaction on explorer
-5. Deploy and demo! 🚀
+3. Test with `USE_MOCK_FDC=true npm run fdc:test` (works immediately)
+4. For real mode: Need to resolve DORIS API access or use alternative data source
+5. Deploy and demo with mock mode! 🚀
 
 ---
 
-**Status:** ✅ READY TO TEST
+**Status:** ✅ READY TO TEST (MOCK MODE) / ⚠️ BLOCKED (REAL MODE - DORIS API)
 
 **Time to setup:** ~5 minutes
 
