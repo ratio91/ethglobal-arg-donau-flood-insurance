@@ -41,7 +41,7 @@ interface IJsonApiRequestBody {
   // Documented fields (from OpenAPI spec)
   url: string;
   postprocessJq: string; // jq filter to transform response data
-  abi_signature: AbiSignature;
+  abi_signature: string; // JSON stringified AbiSignature
 
   // Undocumented fields (appear to work but not in OpenAPI spec)
   // These may be specific to Web2 endpoint implementations
@@ -149,6 +149,17 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
     const url = `${VERIFIER_API}/JsonApi/prepareRequest`;
     console.log('📡 Calling verifier:', url);
 
+    // ABI signature must be JSON stringified
+    const abiSignature = {
+      components: [
+        { internalType: 'string', name: 'objectID', type: 'string' },
+        { internalType: 'int256', name: 'value', type: 'int256' },
+        { internalType: 'int256', name: 'measureDate', type: 'int256' }
+      ],
+      name: 'dto',
+      type: 'tuple'
+    };
+
     const requestBody: IJsonApiRequest = {
       attestationType,
       sourceId,
@@ -156,15 +167,7 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
         // Core fields (documented in OpenAPI spec)
         url: 'https://opendata2.doris-info.at/doris/api/1.0/gauge/getStatus',
         postprocessJq: `.gaugeStatusList[] | select(.currentMeasure.objectID=="${objectID}") | {objectID: .currentMeasure.objectID, value: .currentMeasure.value, measureDate: .currentMeasure.measureDate}`,
-        abi_signature: {
-          components: [
-            { internalType: 'string', name: 'objectID', type: 'string' },
-            { internalType: 'int256', name: 'value', type: 'int256' },
-            { internalType: 'int256', name: 'measureDate', type: 'int256' }
-          ],
-          name: 'dto',
-          type: 'tuple'
-        },
+        abi_signature: JSON.stringify(abiSignature), // Must be a string!
 
         // Extended fields (undocumented but appear to be supported)
         httpMethod: 'GET',
