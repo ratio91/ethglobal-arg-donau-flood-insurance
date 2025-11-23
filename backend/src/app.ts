@@ -1,7 +1,7 @@
 import express from 'express';
 import { config } from './config';
 import { getActivePolicies, getPolicy, resolvePolicy } from './multibaas';
-import { prepareFdcRequest, retrieveFdcProof, calculateRoundId } from './fdc';
+import { prepareFdcRequest, submitFdcRequest, retrieveFdcProof, calculateRoundId } from './fdc';
 import { storage } from './storage';
 import { WebhookEvent } from './types';
 import { monitorAndExpirePolicies } from './expiry';
@@ -345,9 +345,19 @@ export async function monitorAndSubmit() {
 
       console.log('   ✅ FDC request prepared');
 
-      // Calculate round ID and save submission
+      // Submit FDC request ON-CHAIN
+      console.log('   📡 Submitting FDC request on-chain...');
+      const roundId = await submitFdcRequest(abiEncodedRequest);
+
+      if (!roundId) {
+        console.log('   ❌ Failed to submit FDC request on-chain');
+        continue;
+      }
+
+      console.log('   ✅ FDC request submitted on-chain');
+
+      // Save submission for later proof retrieval
       const timestamp = Math.floor(Date.now() / 1000);
-      const roundId = calculateRoundId(timestamp);
 
       await storage.saveSubmission({
         policyId,
