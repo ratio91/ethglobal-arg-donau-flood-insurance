@@ -253,7 +253,22 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     const walletAddress = config.fdc.submitterWallet || config.insurer.walletAddress;
     console.log('💼 Using wallet:', walletAddress);
 
-    // Submit to FdcHub contract via MultiBaas
+    // Get the required fee from FdcHub contract
+    console.log('💰 Fetching required fee...');
+    const feeResult = await contractsApi.callContractFunction(
+      config.fdcHub.address,
+      config.fdcHub.label,
+      'getRequestFee',
+      {
+        args: [],
+        contractOverride: false,
+      }
+    );
+
+    const fee = feeResult.data.result?.output || '0';
+    console.log(`💰 Required fee: ${fee} wei (${parseInt(fee) / 1e18} FLR)`);
+
+    // Submit to FdcHub contract via MultiBaas with the required fee
     const result = await contractsApi.callContractFunction(
       config.fdcHub.address,
       config.fdcHub.label,
@@ -262,6 +277,7 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
         args: [abiEncodedRequest],
         from: walletAddress,
         signer: walletAddress,
+        value: fee, // Include the required fee
         contractOverride: false,
         signAndSubmit: true, // Actually send the transaction!
       }
