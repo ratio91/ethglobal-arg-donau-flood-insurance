@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@curvegrid/multibaas-sdk": "^1.1.0",
+    "@flarenetwork/flare-periphery-contract-artifacts": "^0.1.38",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "node-cron": "^3.0.3"
