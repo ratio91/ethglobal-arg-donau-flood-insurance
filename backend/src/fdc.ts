@@ -289,13 +289,44 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     console.log('📝 Transaction hash:', txHash);
     console.log('🔗 View on explorer:', `https://coston2-explorer.flare.network/tx/${txHash}`);
 
-    // Calculate round ID from current timestamp
-    // TODO: Should ideally get this from the block timestamp or contract event
-    const timestamp = Math.floor(Date.now() / 1000);
-    const roundId = calculateRoundId(timestamp);
+    // Try to extract round ID from emitted events
+    let roundId: number | null = null;
+
+    if (resultData.events && Array.isArray(resultData.events)) {
+      console.log('🔍 Checking transaction events for round ID...');
+
+      // Look for AttestationRequest event (or similar)
+      for (const event of resultData.events) {
+        console.log(`   Event: ${event.name || 'unnamed'}`);
+
+        // Common event names: AttestationRequest, RequestSubmitted, etc.
+        if (event.name === 'AttestationRequest' || event.name === 'RequestSubmitted') {
+          // Try to find round ID in event data
+          if (event.data && event.data.roundId !== undefined) {
+            roundId = parseInt(event.data.roundId);
+            console.log(`✅ Found round ID in ${event.name} event: ${roundId}`);
+            break;
+          }
+          // Sometimes it might be in a different field
+          if (event.data && event.data.votingRoundId !== undefined) {
+            roundId = parseInt(event.data.votingRoundId);
+            console.log(`✅ Found round ID in ${event.name} event: ${roundId}`);
+            break;
+          }
+        }
+      }
+    }
+
+    // Fallback: calculate from timestamp if not found in events
+    if (roundId === null) {
+      console.log('⚠️  Round ID not found in events, calculating from local timestamp');
+      const timestamp = Math.floor(Date.now() / 1000);
+      roundId = calculateRoundId(timestamp);
+      console.log(`   Round ID: ${roundId} (calculated from local time - may be inaccurate)`);
+    }
 
     console.log(`✅ [STEP 2] FDC request submitted on-chain!`);
-    console.log(`   Round ID: ${roundId} (calculated from local time)`);
+    console.log(`   Round ID: ${roundId}`);
     console.log(`   Transaction: ${txHash}`);
 
     return roundId;
