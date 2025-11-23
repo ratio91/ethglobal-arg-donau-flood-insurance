@@ -1,7 +1,10 @@
 import { config } from './config';
 import { toHex } from './utils/hex';
-import { nameToAddress } from '@flarenetwork/flare-periphery-contract-artifacts';
 import { contractsApi } from './multibaas';
+
+// FdcHub contract address on Coston2 (hardcoded for reliability)
+// Source: https://dev.flare.network/fdc/reference/contracts
+const FDCHUB_ADDRESS_COSTON2 = '0x52308001b46cB6b1d0E978A79e71D03996d891E6';
 
 // ============================================================================
 // TypeScript Types (from OpenAPI spec)
@@ -246,8 +249,8 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     console.log('📡 [STEP 2] Submitting FDC request ON-CHAIN to FdcHub...');
     console.log('   Request bytes:', abiEncodedRequest.substring(0, 20) + '...');
 
-    // Get FdcHub contract address from Flare periphery artifacts
-    const fdcHubAddress = await nameToAddress('FdcHub', 'coston2');
+    // Use hardcoded FdcHub contract address for Coston2
+    const fdcHubAddress = FDCHUB_ADDRESS_COSTON2;
     console.log('📍 FdcHub address:', fdcHubAddress);
 
     // Get wallet from config (same wallet used for claiming policies)
