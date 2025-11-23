@@ -13,7 +13,9 @@ export const config = {
     chainId: parseInt(process.env.CHAIN_ID || '114'), // Actual chain ID for RPC
   },
   fdc: {
-    verifierApiBase: process.env.FDC_VERIFIER_API_BASE || 'https://fdc-verification.flare.network/verifier',
+    verifierApiBase: process.env.FDC_VERIFIER_API_BASE  || 'https://fdc-verifiers-testnet.flare.network',
+    daLayerApiBase: process.env.COSTON2_DA_LAYER_URL || 'https://ctn2-data-availability.flare.network/api/v0/fdc',
+    roundDuration: 90,
   },
   server: {
     port: parseInt(process.env.PORT || '3000'),
