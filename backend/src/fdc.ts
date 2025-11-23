@@ -253,9 +253,9 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     const walletAddress = config.fdc.submitterWallet || config.insurer.walletAddress;
     console.log('💼 Using wallet:', walletAddress);
 
-    // TODO: Determine correct FDC fee - placeholder for now
-    const fee = '0'; // Set to 0 for now - user to provide correct value
-    console.log(`💰 Using fee: ${fee} wei`);
+    // FDC request fee from config (default: 0.025 FLR on Coston2)
+    const fee = config.fdc.requestFee;
+    console.log(`💰 Using fee: ${fee} wei (${parseInt(fee) / 1e18} FLR)`);
 
     // Submit to FdcHub contract via MultiBaas
     const result = await contractsApi.callContractFunction(

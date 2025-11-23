@@ -21,6 +21,7 @@ export const config = {
     apiKey: process.env.FDC_API_KEY || '', // Optional API key for verifier
     daLayerApiBase: process.env.COSTON2_DA_LAYER_URL || 'https://ctn2-data-availability.flare.network/api/v0/fdc',
     submitterWallet: process.env.FDC_SUBMITTER_WALLET, // If not set, will use insurer wallet
+    requestFee: process.env.FDC_REQUEST_FEE || '25000000000000000', // 0.025 FLR in wei (Coston2)
     roundDuration: 90,
   },
   server: {
