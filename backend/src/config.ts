@@ -15,6 +15,7 @@ export const config = {
   fdc: {
     verifierApiBase: process.env.FDC_VERIFIER_API_BASE  || 'https://fdc-verifiers-testnet.flare.network',
     daLayerApiBase: process.env.COSTON2_DA_LAYER_URL || 'https://ctn2-data-availability.flare.network/api/v0/fdc',
+    submitterWallet: process.env.FDC_SUBMITTER_WALLET, // If not set, will use insurer wallet
     roundDuration: 90,
   },
   server: {

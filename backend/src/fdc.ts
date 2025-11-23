@@ -1,5 +1,7 @@
 import { config } from './config';
 import { toHex } from './utils/hex';
+import { nameToAddress } from '@flarenetwork/flare-periphery-contract-artifacts';
+import { contractsApi } from './multibaas';
 
 const VERIFIER_API = config.fdc.verifierApiBase;
 const DA_LAYER_API = 'https://ctn2-data-availability.flare.network/api/v0/fdc';
@@ -69,8 +71,9 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
 }
 
 /**
- * STEP 2: Submit prepared request to DA Layer
- * This returns a round ID for later proof retrieval
+ * STEP 2: Submit FDC request ON-CHAIN to FdcHub contract
+ * This is ON-CHAIN and COSTS GAS (uses funded backend wallet)
+ * Returns round ID calculated from current timestamp
  */
 export async function submitFdcRequest(abiEncodedRequest: string): Promise<number | null> {
   if (process.env.USE_MOCK_FDC === 'true') {
@@ -80,44 +83,65 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
   }
 
   try {
-    console.log(`📡 [STEP 2] Submitting FDC request to DA Layer...`);
+    console.log('📡 [STEP 2] Submitting FDC request ON-CHAIN to FdcHub...');
     console.log('   Request bytes:', abiEncodedRequest.substring(0, 20) + '...');
 
-    const url = `${DA_LAYER_API}/submit-attestation-request`;
-    console.log('📡 Calling DA Layer:', url);
+    // Get FdcHub contract address from Flare periphery artifacts
+    const fdcHubAddress = nameToAddress('FdcHub', 'coston2');
+    console.log('📍 FdcHub address:', fdcHubAddress);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        abiEncodedRequest
-      }),
-    });
+    // Get wallet from config (same wallet used for claiming policies)
+    const walletAddress = config.fdc.submitterWallet || config.insurer.walletAddress;
+    console.log('💼 Using wallet:', walletAddress);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ DA Layer submit failed:', response.status, errorText);
+    // Submit to FdcHub contract via MultiBaas
+    // This is the SAME pattern as claimPolicy!
+    const result = await contractsApi.callContractFunction(
+      fdcHubAddress,
+      'FdcHub', // Label (must be registered in MultiBaas first)
+      'requestAttestation',
+      {
+        args: [abiEncodedRequest],
+        from: walletAddress,
+        signer: walletAddress,
+        contractOverride: false,
+        signAndSubmit: true, // Actually send the transaction!
+      }
+    );
+
+    console.log('📄 FDC submission result:', result.data.message || 'success');
+
+    const resultData = result.data.result as any;
+
+    if (!resultData.tx?.hash) {
+      console.error('❌ No transaction hash in result');
+      console.error('   Result data:', JSON.stringify(resultData, null, 2));
       return null;
     }
 
-    const data = await response.json();
-    console.log('📡 DA Layer response:', data);
+    const txHash = resultData.tx.hash;
+    console.log('📝 Transaction hash:', txHash);
+    console.log('🔗 View on explorer:', `https://coston2-explorer.flare.network/tx/${txHash}`);
 
-    // Extract round ID from response
-    const roundId = data.roundId || data.votingRound;
-    
-    if (!roundId) {
-      console.error('❌ No round ID in response:', data);
-      return null;
-    }
+    // Calculate round ID from current timestamp
+    // FdcHub emits events with the actual round ID, but for simplicity we calculate it
+    const timestamp = Math.floor(Date.now() / 1000);
+    const roundId = calculateRoundId(timestamp);
 
-    console.log(`✅ [STEP 2] Request submitted! Round ID: ${roundId}`);
+    console.log(`✅ [STEP 2] FDC request submitted on-chain!`);
+    console.log(`   Round ID: ${roundId}`);
+    console.log(`   Transaction: ${txHash}`);
+
     return roundId;
-    
+
   } catch (error: any) {
-    console.error('❌ Failed to submit FDC request:', error.message);
+    console.error('❌ Failed to submit FDC request on-chain');
+    console.error('   Error:', error?.response?.data || error.message);
+
+    if (error?.response?.data) {
+      console.error('   Details:', JSON.stringify(error.response.data, null, 2));
+    }
+
     return null;
   }
 }
@@ -272,6 +296,76 @@ async function createMockRequest(objectID: string): Promise<string | null> {
     console.error('❌ Failed to fetch real water level:', error.message);
     return null;
   }
+}
+
+/**
+ * Calculate Flare voting round ID from timestamp
+ * Flare voting rounds are 90 seconds
+ */
+export function calculateRoundId(timestamp: number): number {
+  const ROUND_DURATION = 90; // seconds
+  const roundId = Math.floor(timestamp / ROUND_DURATION);
+  return roundId;
+}
+
+/**
+ * Create mock FDC proof for testing/demo
+ * Uses REAL water level data from DORIS API
+ */
+async function createMockProof(roundId: number, objectID?: string): Promise<any> {
+  console.log('⚠️  Creating MOCK FDC proof with REAL water level data');
+
+  let waterLevelData = null;
+
+  // Fetch real water level from DORIS if objectID provided
+  if (objectID) {
+    try {
+      const dorisResponse = await fetch(
+        'https://opendata2.doris-info.at/doris/api/1.0/gauge/getStatus?VIADONAU_PARTNER_KEY=opendata'
+      );
+
+      if (dorisResponse.ok) {
+        const dorisData = await dorisResponse.json();
+        const gauge = dorisData.gaugeStatusList.find(
+          (g: any) => g.currentMeasure.objectID === objectID
+        );
+
+        if (gauge) {
+          waterLevelData = {
+            objectID: gauge.currentMeasure.objectID,
+            value: gauge.currentMeasure.value,
+            measureDate: new Date(gauge.currentMeasure.measureDate).getTime(),
+          };
+          console.log(`   ✅ Real water level: ${waterLevelData.value} cm`);
+        }
+      }
+    } catch (error) {
+      console.error('   ⚠️  Failed to fetch real water level:', error);
+    }
+  }
+
+  // Return mock proof structure
+  return {
+    status: 'VALID',
+    data: {
+      attestationType: toHex('Web2Json'),
+      sourceId: toHex('PublicWeb2'),
+      votingRound: roundId,
+      lowestUsedTimestamp: Math.floor(Date.now() / 1000),
+      responseBody: {
+        merkleRoot: '0x' + '1234567890abcdef'.repeat(4), // Mock merkle root
+        abiEncodedData: '0xmock', // Mock ABI encoded data
+      },
+    },
+    signatures: {
+      v: [28],
+      r: ['0x' + '1234'.repeat(16)],
+      s: ['0x' + '5678'.repeat(16)],
+    },
+    // Include real water level data
+    waterLevel: waterLevelData?.value || 0,
+    measureDate: waterLevelData?.measureDate || Date.now(),
+  };
 }
 
 /**
