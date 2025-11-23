@@ -247,7 +247,7 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     console.log('   Request bytes:', abiEncodedRequest.substring(0, 20) + '...');
 
     // Get FdcHub contract address from Flare periphery artifacts
-    const fdcHubAddress = nameToAddress('FdcHub', 'coston2');
+    const fdcHubAddress = await nameToAddress('FdcHub', 'coston2');
     console.log('📍 FdcHub address:', fdcHubAddress);
 
     // Get wallet from config (same wallet used for claiming policies)
