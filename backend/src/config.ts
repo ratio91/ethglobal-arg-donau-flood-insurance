@@ -27,19 +27,19 @@ export const config = {
   },
   server: {
     port: parseInt(process.env.PORT || '3000'),
-    monitorInterval: parseInt(process.env.MONITOR_INTERVAL_MS || '120000'),
+    monitorInterval: parseInt(process.env.MONITOR_INTERVAL_MS || '180000'), // 3 minutes (increased from 2 min)
     autoSettle: process.env.AUTO_SETTLE_ENABLED === 'true', // If false, just store proofs for frontend
   },
   insurer: {
     walletLabel: process.env.INSURER_WALLET_LABEL || 'ethglobal-buenos-1',
     walletAddress: process.env.INSURER_WALLET_ADDRESS!,
     autoClaimEnabled: process.env.AUTO_CLAIM_ENABLED === 'true',
-    checkInterval: parseInt(process.env.INSURER_CHECK_INTERVAL_MS || '30000'),
+    checkInterval: parseInt(process.env.INSURER_CHECK_INTERVAL_MS || '180000'), // 3 minutes (increased from 30 sec)
   },
   expiry: {
     autoExpireEnabled: process.env.AUTO_EXPIRE_ENABLED === 'true',
     walletAddress: process.env.EXPIRY_WALLET_ADDRESS || process.env.INSURER_WALLET_ADDRESS!, // Can use same as insurer
-    checkInterval: parseInt(process.env.MONITOR_INTERVAL_MS || '120000'),
+    checkInterval: parseInt(process.env.MONITOR_INTERVAL_MS || '180000'), // 3 minutes (increased from 2 min)
   },
 };
 

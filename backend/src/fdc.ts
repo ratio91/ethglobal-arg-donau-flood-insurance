@@ -107,6 +107,7 @@ interface FdcWorkflowResult {
 const VERIFIER_API = config.fdc.verifierApiBase;
 const DA_LAYER_API = 'https://ctn2-data-availability.flare.network/api/v1/fdc';
 const ROUND_DURATION_SECONDS = 90;
+const DA_WAIT_TIME_SECONDS = 100; // Wait 100 seconds for DA layer proof to be ready
 
 // Flare FDC voting round calculation constants
 // See: https://dev.flare.network/fdc/guides/fdc-by-hand
@@ -221,46 +222,6 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
 }
 
 // ============================================================================
-// Helper: Extract Round ID from Events
-// ============================================================================
-
-/**
- * Extract round ID from AttestationRequest event
- * Event signature: AttestationRequest(bytes,uint256) where uint256 is the round ID
- */
-function extractRoundIdFromEvents(events: any[]): number | null {
-  for (const event of events) {
-    console.log(`   Event: ${event.name || 'unnamed'}`);
-
-    if (event.name === 'AttestationRequest') {
-      console.log('   Event data:', JSON.stringify(event.data, null, 2));
-
-      // The event signature is AttestationRequest(bytes,uint256)
-      // The second parameter (index 1) is the round ID
-
-      // Try different possible data formats from MultiBaas
-      if (Array.isArray(event.data) && event.data.length >= 2) {
-        // Data as array: [requestBytes, roundId]
-        const roundId = parseInt(event.data[1]);
-        console.log(`✅ Found round ID in AttestationRequest event (array): ${roundId}`);
-        return roundId;
-      } else if (event.data && typeof event.data === 'object') {
-        // Try various possible field names
-        const possibleFields = ['roundId', 'votingRoundId', '1', 'arg1', '_votingRoundId', 'param1'];
-        for (const field of possibleFields) {
-          if (event.data[field] !== undefined) {
-            const roundId = parseInt(event.data[field]);
-            console.log(`✅ Found round ID in AttestationRequest event (${field}): ${roundId}`);
-            return roundId;
-          }
-        }
-      }
-    }
-  }
-  return null;
-}
-
-// ============================================================================
 // STEP 2: Submit FDC Request (ON-CHAIN)
 // ============================================================================
 
@@ -333,54 +294,20 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     console.log('📝 Transaction hash:', txHash);
     console.log('🔗 View on explorer:', `https://coston2-explorer.flare.network/tx/${txHash}`);
 
-    // Try to extract round ID from emitted events
-    // Event signature: AttestationRequest(bytes,uint256) where uint256 is the round ID
-    let roundId: number | null = null;
+    // Calculate round ID from current timestamp
+    // Formula: roundId = Math.floor((timestamp - FIRST_VOTING_ROUND_START_TS) / ROUND_DURATION_SECONDS)
+    const timestamp = Math.floor(Date.now() / 1000);
+    const roundId = calculateRoundId(timestamp);
 
-    // First try from immediate result events
-    if (resultData.events && Array.isArray(resultData.events)) {
-      console.log('🔍 Checking immediate result events for round ID...');
-      roundId = extractRoundIdFromEvents(resultData.events);
-    }
+    console.log('\n📊 Round ID Calculation:');
+    console.log(`   Current timestamp: ${timestamp}`);
+    console.log(`   First voting round start: ${FIRST_VOTING_ROUND_START_TS}`);
+    console.log(`   Offset from start: ${timestamp - FIRST_VOTING_ROUND_START_TS} seconds`);
+    console.log(`   Round duration: ${ROUND_DURATION_SECONDS} seconds`);
+    console.log(`   Formula: Math.floor((${timestamp} - ${FIRST_VOTING_ROUND_START_TS}) / ${ROUND_DURATION_SECONDS})`);
+    console.log(`   Calculated Round ID: ${roundId}`);
 
-    // If not found, fetch the transaction receipt
-    if (roundId === null) {
-      console.log('🔍 Fetching transaction receipt for events...');
-      try {
-        // Wait a moment for transaction to be fully processed
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Fetch receipt from MultiBaas using 'ethereum' chain label
-        const receiptResponse = await chainsApi.getTransactionReceipt(
-          'ethereum',
-          txHash
-        );
-
-        console.log('📄 Receipt response:', JSON.stringify(receiptResponse.data, null, 2));
-
-        // Try to extract events from receipt
-        const receipt = receiptResponse.data.result as any;
-        if (receipt?.events && Array.isArray(receipt.events)) {
-          console.log('🔍 Checking receipt events for round ID...');
-          roundId = extractRoundIdFromEvents(receipt.events);
-        }
-      } catch (receiptError: any) {
-        console.error('⚠️  Failed to fetch receipt:', receiptError.message);
-        if (receiptError.response) {
-          console.error('   Response:', JSON.stringify(receiptError.response.data, null, 2));
-        }
-      }
-    }
-
-    // Fallback: calculate from timestamp if not found in events
-    if (roundId === null) {
-      console.log('⚠️  Round ID not found in events, calculating from local timestamp');
-      const timestamp = Math.floor(Date.now() / 1000);
-      roundId = calculateRoundId(timestamp);
-      console.log(`   Round ID: ${roundId} (calculated from local time - may be inaccurate)`);
-    }
-
-    console.log(`✅ [STEP 2] FDC request submitted on-chain!`);
+    console.log(`\n✅ [STEP 2] FDC request submitted on-chain!`);
     console.log(`   Round ID: ${roundId}`);
     console.log(`   Transaction: ${txHash}`);
 
@@ -533,8 +460,8 @@ export async function completeFdcWorkflow(objectID: string): Promise<FdcWorkflow
       throw new Error('Failed to submit FDC request');
     }
 
-    console.log('\n⏳ Waiting 90 seconds for voting round to complete...\n');
-    await new Promise(resolve => setTimeout(resolve, ROUND_DURATION_SECONDS * 1000));
+    console.log(`\n⏳ Waiting ${DA_WAIT_TIME_SECONDS} seconds for voting round to complete and DA proof to be ready...\n`);
+    await new Promise(resolve => setTimeout(resolve, DA_WAIT_TIME_SECONDS * 1000));
 
     // Step 3: Retrieve proof (OFF-CHAIN)
     const proof = await retrieveFdcProof(roundId, abiEncodedRequest, objectID);
