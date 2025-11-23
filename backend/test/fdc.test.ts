@@ -11,15 +11,17 @@ describe('FDC Functions', () => {
   describe('calculateRoundId', () => {
     it('should calculate correct round ID for a given timestamp', () => {
       const timestamp = 1700000000; // Example timestamp
-      const expectedRoundId = Math.floor(timestamp / 90);
+      const FIRST_VOTING_ROUND_START_TS = 1658429955; // Coston2 testnet
+      const expectedRoundId = Math.floor((timestamp - FIRST_VOTING_ROUND_START_TS) / 90);
 
       const roundId = calculateRoundId(timestamp);
 
       expect(roundId).toBe(expectedRoundId);
     });
 
-    it('should handle timestamp 0', () => {
-      const roundId = calculateRoundId(0);
+    it('should handle timestamp at first voting round start', () => {
+      const FIRST_VOTING_ROUND_START_TS = 1658429955; // Coston2 testnet
+      const roundId = calculateRoundId(FIRST_VOTING_ROUND_START_TS);
       expect(roundId).toBe(0);
     });
 

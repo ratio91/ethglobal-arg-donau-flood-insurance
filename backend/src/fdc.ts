@@ -108,6 +108,10 @@ const VERIFIER_API = config.fdc.verifierApiBase;
 const DA_LAYER_API = 'https://ctn2-data-availability.flare.network/api/v0/fdc';
 const ROUND_DURATION_SECONDS = 90;
 
+// Flare FDC voting round calculation constants
+// See: https://dev.flare.network/fdc/guides/fdc-by-hand
+const FIRST_VOTING_ROUND_START_TS = 1658429955; // Coston2 testnet
+
 // ============================================================================
 // STEP 1: Prepare FDC Request (OFF-CHAIN)
 // ============================================================================
@@ -276,7 +280,7 @@ function extractRoundIdFromEvents(events: any[]): number | null {
  */
 export async function submitFdcRequest(abiEncodedRequest: string): Promise<number | null> {
   if (process.env.USE_MOCK_FDC === 'true') {
-    const mockRoundId = Math.floor(Date.now() / (ROUND_DURATION_SECONDS * 1000));
+    const mockRoundId = calculateRoundId(Math.floor(Date.now() / 1000));
     console.log('⚠️  Mock submission, round ID:', mockRoundId);
     return mockRoundId;
   }
@@ -543,10 +547,16 @@ export async function completeFdcWorkflow(objectID: string): Promise<FdcWorkflow
 
 /**
  * Calculate Flare voting round ID from timestamp
- * Flare voting rounds are 90 seconds each
+ *
+ * Formula: votingRoundId = Math.floor((timestamp - firstVotingRoundStartTs) / votingEpochDurationSeconds)
+ *
+ * @param timestamp - Unix timestamp in seconds (from block.timestamp)
+ * @returns The voting round ID
+ *
+ * See: https://dev.flare.network/fdc/guides/fdc-by-hand
  */
 export function calculateRoundId(timestamp: number): number {
-  const roundId = Math.floor(timestamp / ROUND_DURATION_SECONDS);
+  const roundId = Math.floor((timestamp - FIRST_VOTING_ROUND_START_TS) / ROUND_DURATION_SECONDS);
   return roundId;
 }
 
