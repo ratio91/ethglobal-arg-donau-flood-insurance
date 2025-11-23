@@ -32,32 +32,26 @@ interface AbiSignature {
 }
 
 /**
- * Request body for JsonApi attestation (from OpenAPI spec)
- * NOTE: The spec only documents url, postprocessJq, and abi_signature
- * but httpMethod, headers, queryParams, body appear to be supported
- * for Web2-specific endpoints (undocumented extensions)
+ * Request body for Web2Json attestation (from OpenAPI spec)
+ * All fields match the Web2Json_RequestBody schema
  */
-interface IJsonApiRequestBody {
-  // Documented fields (from OpenAPI spec)
+interface Web2JsonRequestBody {
   url: string;
-  postprocessJq: string; // jq filter to transform response data
-  abi_signature: string; // JSON stringified AbiSignature
-
-  // Undocumented fields (appear to work but not in OpenAPI spec)
-  // These may be specific to Web2 endpoint implementations
-  httpMethod?: 'GET' | 'POST';
-  headers?: Record<string, string>;
-  queryParams?: Record<string, string>;
-  body?: Record<string, any>;
+  httpMethod: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  headers: string;        // JSON string, e.g., '{"Content-Type":"application/json"}'
+  queryParams: string;    // JSON string, e.g., '{"id": 1}'
+  body: string;           // String (use '' for empty body)
+  postProcessJq: string;  // jq filter to transform response data
+  abiSignature: string;   // JSON stringified AbiSignature
 }
 
 /**
  * Complete attestation request structure (from OpenAPI spec)
  */
-interface IJsonApiRequest {
-  attestationType: string; // Hex-encoded attestation type (e.g., "0x494a736f6e417069...")
-  sourceId: string;        // Hex-encoded source ID (e.g., "0x5745423200...")
-  requestBody: IJsonApiRequestBody;
+interface Web2JsonRequest {
+  attestationType: string; // Hex-encoded attestation type (e.g., "0x576562324a736f6e...")
+  sourceId: string;        // Hex-encoded source ID (e.g., "0x5075626c69635765623200...")
+  requestBody: Web2JsonRequestBody;
 }
 
 /**
@@ -142,12 +136,12 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
   try {
     console.log(`🔧 [STEP 1] Preparing FDC request for gauge: ${objectID}`);
 
-    // Attestation type and source ID must match what the verifier expects
-    const attestationType = toHex('IJsonApi');  // NOT 'Web2Json'!
-    const sourceId = toHex('WEB2');             // NOT 'PublicWeb2'!
+    // Attestation type and source ID from OpenAPI spec
+    const attestationType = toHex('Web2Json');
+    const sourceId = toHex('PublicWeb2');
 
-    // Fixed endpoint: /JsonApi/prepareRequest (from OpenAPI spec)
-    const url = `${VERIFIER_API}/JsonApi/prepareRequest`;
+    // Endpoint from OpenAPI spec
+    const url = `${VERIFIER_API}/Web2Json/prepareRequest`;
     console.log('📡 Calling verifier:', url);
 
     // ABI signature must be JSON stringified
@@ -161,20 +155,17 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
       type: 'tuple'
     };
 
-    const requestBody: IJsonApiRequest = {
+    const requestBody: Web2JsonRequest = {
       attestationType,
       sourceId,
       requestBody: {
-        // Core fields (documented in OpenAPI spec)
         url: 'https://opendata2.doris-info.at/doris/api/1.0/gauge/getStatus',
-        postprocessJq: `.gaugeStatusList[] | select(.currentMeasure.objectID=="${objectID}") | {objectID: .currentMeasure.objectID, value: .currentMeasure.value, measureDate: .currentMeasure.measureDate}`,
-        abi_signature: JSON.stringify(abiSignature), // Must be a string!
-
-        // Extended fields (undocumented but appear to be supported)
         httpMethod: 'GET',
-        headers: {},
-        queryParams: { VIADONAU_PARTNER_KEY: 'opendata' },
-        body: {}
+        headers: '{}',  // Empty headers as JSON string
+        queryParams: JSON.stringify({ VIADONAU_PARTNER_KEY: 'opendata' }),
+        body: '',  // Empty body string
+        postProcessJq: `.gaugeStatusList[] | select(.currentMeasure.objectID=="${objectID}") | {objectID: .currentMeasure.objectID, value: .currentMeasure.value, measureDate: .currentMeasure.measureDate}`,
+        abiSignature: JSON.stringify(abiSignature),
       }
     };
 

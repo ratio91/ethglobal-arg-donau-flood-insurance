@@ -13,7 +13,7 @@ export const config = {
     chainId: parseInt(process.env.CHAIN_ID || '114'), // Actual chain ID for RPC
   },
   fdc: {
-    verifierApiBase: process.env.FDC_VERIFIER_API_BASE  || 'https://web2json-verifier-test.flare.rocks/verifier',
+    verifierApiBase: process.env.FDC_VERIFIER_API_BASE  || 'https://web2json-verifier-test.flare.rocks',
     apiKey: process.env.FDC_API_KEY || '', // Optional API key for verifier
     daLayerApiBase: process.env.COSTON2_DA_LAYER_URL || 'https://ctn2-data-availability.flare.network/api/v0/fdc',
     submitterWallet: process.env.FDC_SUBMITTER_WALLET, // If not set, will use insurer wallet
