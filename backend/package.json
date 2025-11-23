@@ -10,7 +10,10 @@
     "lint": "eslint src --ext .ts",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "fdc:test": "tsx scripts/test-fdc-onchain.ts",
+    "fdc:test:steps": "tsx scripts/test-fdc-onchain.ts --step-by-step",
+    "contracts:list": "tsx scripts/list-contracts.ts"
   },
   "dependencies": {
     "@curvegrid/multibaas-sdk": "^1.1.0",
