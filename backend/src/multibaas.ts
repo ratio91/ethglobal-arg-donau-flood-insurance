@@ -177,6 +177,7 @@ export async function claimPolicyAsInsurer(policyId: number, coverage: string, w
       contractOverride: false,
       from: walletAddress, // Wallet address to send transaction from
       signer: walletAddress, // Wallet address that will sign the transaction
+      signAndSubmit: true // set to true to actually send TX!
     };
 
     console.log(`🔍 DEBUG - methodArgs object:`, JSON.stringify(methodArgs, null, 2));
