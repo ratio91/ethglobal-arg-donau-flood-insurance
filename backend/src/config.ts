@@ -13,7 +13,7 @@ export const config = {
     chainId: parseInt(process.env.CHAIN_ID || '114'), // Actual chain ID for RPC
   },
   fdcHub: {
-    label: process.env.FDCHUB_LABEL || 'fdchub11',
+    label: process.env.FDCHUB_LABEL || 'fdchub1',
     address: (process.env.FDCHUB_ADDRESS || '0x48aC463d7975828989331F4De43341627b9c5f1D').toLowerCase(), // Coston2
   },
   fdc: {
