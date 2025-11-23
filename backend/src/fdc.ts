@@ -98,7 +98,7 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     // This is the SAME pattern as claimPolicy!
     const result = await contractsApi.callContractFunction(
       fdcHubAddress,
-      'FdcHub', // Label (must be registered in MultiBaas first)
+      'fdchub11', // Label registered in MultiBaas
       'requestAttestation',
       {
         args: [abiEncodedRequest],
