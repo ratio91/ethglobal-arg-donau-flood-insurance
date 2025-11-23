@@ -18,6 +18,7 @@ export const config = {
   server: {
     port: parseInt(process.env.PORT || '3000'),
     monitorInterval: parseInt(process.env.MONITOR_INTERVAL_MS || '120000'),
+    autoSettle: process.env.AUTO_SETTLE_ENABLED === 'true', // If false, just store proofs for frontend
   },
   insurer: {
     walletLabel: process.env.INSURER_WALLET_LABEL || 'ethglobal-buenos-1',

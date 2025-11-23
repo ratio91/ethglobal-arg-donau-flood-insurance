@@ -33,6 +33,9 @@ export interface FdcSubmission {
   roundId: number;
   timestamp: number;
   status: 'pending' | 'completed' | 'failed';
+  proof?: any; // Store the full FDC proof when retrieved
+  waterLevel?: number; // Extracted water level from proof
+  proofTimestamp?: number; // When proof was retrieved
 }
 
 /**

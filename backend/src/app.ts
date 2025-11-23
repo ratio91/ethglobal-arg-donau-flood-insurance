@@ -8,6 +8,14 @@ import { WebhookEvent } from './types';
 export const app = express();
 app.use(express.json());
 
+// Enable CORS for frontend
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
 /**
  * Health check endpoint
  */
@@ -97,6 +105,33 @@ app.get('/submissions', async (req, res) => {
     const all = await storage.getAllSubmissions();
     res.json({ total: all.length, submissions: all });
   } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Get proof for a specific policy (for frontend settlement)
+ */
+app.get('/api/policy/:policyId/proof', async (req, res) => {
+  try {
+    const policyId = parseInt(req.params.policyId);
+    const submission = await storage.getSubmissionByPolicyId(policyId);
+
+    if (!submission || !submission.proof) {
+      return res.json({ hasProof: false });
+    }
+
+    res.json({
+      hasProof: true,
+      policyId,
+      proof: submission.proof,
+      waterLevel: submission.waterLevel,
+      roundId: submission.roundId,
+      proofTimestamp: submission.proofTimestamp,
+      measureDate: submission.timestamp,
+    });
+  } catch (error: any) {
+    console.error(`Error fetching proof for policy ${req.params.policyId}:`, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -223,16 +258,34 @@ export async function checkPendingAndSettle() {
 
       console.log('   ✅ Proof retrieved successfully!');
 
-      // Submit settlement transaction via MultiBaaS
-      console.log('   🔄 Submitting settlement transaction...');
-      const txHash = await resolvePolicy(submission.policyId, proof);
+      // Extract water level from proof
+      let waterLevel = 0;
+      try {
+        if (proof?.data?.responseBody?.dto?.value) {
+          waterLevel = Number(proof.data.responseBody.dto.value);
+          console.log(`   📊 Water level from proof: ${waterLevel} cm`);
+        }
+      } catch (error) {
+        console.error('   ⚠️  Could not extract water level from proof');
+      }
 
-      if (txHash) {
-        console.log(`   🎉 Policy settled! Transaction: ${txHash}`);
-        await storage.updateSubmissionStatus(submission.policyId, 'completed');
+      // Store proof for frontend to display
+      await storage.updateSubmissionWithProof(submission.policyId, proof, waterLevel);
+
+      // Only auto-settle if configured to do so
+      if (config.server.autoSettle) {
+        console.log('   🔄 Auto-settle enabled, submitting settlement transaction...');
+        const txHash = await resolvePolicy(submission.policyId, proof);
+
+        if (txHash) {
+          console.log(`   🎉 Policy settled! Transaction: ${txHash}`);
+          await storage.updateSubmissionStatus(submission.policyId, 'completed');
+        } else {
+          console.log('   ❌ Failed to settle policy');
+          await storage.updateSubmissionStatus(submission.policyId, 'failed');
+        }
       } else {
-        console.log('   ❌ Failed to settle policy');
-        await storage.updateSubmissionStatus(submission.policyId, 'failed');
+        console.log('   💾 Auto-settle disabled, proof stored for user settlement from frontend');
       }
     }
 

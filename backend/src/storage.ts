@@ -10,6 +10,7 @@ export interface IStorage {
   getAllSubmissions(): Promise<FdcSubmission[]>;
   getPendingSubmissions(): Promise<FdcSubmission[]>;
   updateSubmissionStatus(policyId: number, status: 'completed' | 'failed'): Promise<void>;
+  updateSubmissionWithProof(policyId: number, proof: any, waterLevel: number): Promise<void>;
   getSubmissionByPolicyId(policyId: number): Promise<FdcSubmission | null>;
 }
 
@@ -65,6 +66,19 @@ export class JsonStorage implements IStorage {
       submissions[index].status = status;
       fs.writeFileSync(this.storageFile, JSON.stringify(submissions, null, 2));
       console.log(`✅ Updated policy ${policyId} status to ${status}`);
+    }
+  }
+
+  async updateSubmissionWithProof(policyId: number, proof: any, waterLevel: number): Promise<void> {
+    const submissions = await this.getAllSubmissions();
+    const index = submissions.findIndex(s => s.policyId === policyId);
+
+    if (index !== -1) {
+      submissions[index].proof = proof;
+      submissions[index].waterLevel = waterLevel;
+      submissions[index].proofTimestamp = Math.floor(Date.now() / 1000);
+      fs.writeFileSync(this.storageFile, JSON.stringify(submissions, null, 2));
+      console.log(`✅ Saved proof for policy ${policyId}`);
     }
   }
 
