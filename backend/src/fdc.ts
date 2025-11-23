@@ -290,28 +290,38 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     console.log('🔗 View on explorer:', `https://coston2-explorer.flare.network/tx/${txHash}`);
 
     // Try to extract round ID from emitted events
+    // Event signature: AttestationRequest(bytes,uint256) where uint256 is the round ID
     let roundId: number | null = null;
 
     if (resultData.events && Array.isArray(resultData.events)) {
       console.log('🔍 Checking transaction events for round ID...');
 
-      // Look for AttestationRequest event (or similar)
       for (const event of resultData.events) {
         console.log(`   Event: ${event.name || 'unnamed'}`);
 
-        // Common event names: AttestationRequest, RequestSubmitted, etc.
-        if (event.name === 'AttestationRequest' || event.name === 'RequestSubmitted') {
-          // Try to find round ID in event data
-          if (event.data && event.data.roundId !== undefined) {
-            roundId = parseInt(event.data.roundId);
-            console.log(`✅ Found round ID in ${event.name} event: ${roundId}`);
+        if (event.name === 'AttestationRequest') {
+          console.log('   Event data:', JSON.stringify(event.data, null, 2));
+
+          // The event signature is AttestationRequest(bytes,uint256)
+          // The second parameter (index 1) is the round ID
+
+          // Try different possible data formats from MultiBaas
+          if (Array.isArray(event.data) && event.data.length >= 2) {
+            // Data as array: [requestBytes, roundId]
+            roundId = parseInt(event.data[1]);
+            console.log(`✅ Found round ID in AttestationRequest event (array): ${roundId}`);
             break;
-          }
-          // Sometimes it might be in a different field
-          if (event.data && event.data.votingRoundId !== undefined) {
-            roundId = parseInt(event.data.votingRoundId);
-            console.log(`✅ Found round ID in ${event.name} event: ${roundId}`);
-            break;
+          } else if (event.data && typeof event.data === 'object') {
+            // Try various possible field names
+            const possibleFields = ['roundId', 'votingRoundId', '1', 'arg1', '_votingRoundId'];
+            for (const field of possibleFields) {
+              if (event.data[field] !== undefined) {
+                roundId = parseInt(event.data[field]);
+                console.log(`✅ Found round ID in AttestationRequest event (${field}): ${roundId}`);
+                break;
+              }
+            }
+            if (roundId !== null) break;
           }
         }
       }
