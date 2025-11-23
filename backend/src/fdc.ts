@@ -22,7 +22,7 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
     const attestationType = toHex('Web2Json');
     const sourceId = toHex('PublicWeb2');
 
-    const url = `${VERIFIER_API}/verifier/web2/Web2Json/prepareRequest`;
+    const url = `${VERIFIER_API}/web2/Web2Json/prepareRequest`;
     console.log('📡 Calling verifier:', url);
 
     const response = await fetch(url, {
