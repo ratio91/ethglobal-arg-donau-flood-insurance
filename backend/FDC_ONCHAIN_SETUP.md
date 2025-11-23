@@ -25,32 +25,43 @@ Prepare Request → Submit ON-CHAIN (FdcHub) → Wait 90s → Retrieve Proof
 
 ## 🚀 Setup Steps
 
-### Step 1: Register FdcHub in MultiBaas
+### Step 1: Register FdcHub in MultiBaas (ONE-TIME SETUP)
 
-Run the setup script:
+**FdcHub contract details for Coston2:**
+- **Address:** `0x52308001b46cB6b1d0E978A79e71D03996d891E6`
+- **Network:** Coston2 Testnet
+- **Label:** `FdcHub` (use this exact label in your code)
 
+**How to register in MultiBaas UI:**
+
+1. **Go to your MultiBaas deployment** → Contracts section
+2. **Click "Add Contract"**
+3. **Fill in the contract details:**
+   - **Label:** `FdcHub` (important: must match the code!)
+   - **Address:** `0x52308001b46cB6b1d0E978A79e71D03996d891E6`
+   - **Network/Chain:** Select your Coston2 network
+   - **ABI:** See below ↓
+
+4. **Get the FdcHub ABI:**
+
+You have two options:
+
+**Option A: Get ABI from your installed package**
 ```bash
 cd backend
-npm run fdc:setup
+node -e "const {nameToAbi} = require('@flarenetwork/flare-periphery-contract-artifacts'); console.log(JSON.stringify(nameToAbi('FdcHub', 'coston2'), null, 2))" > fdchub-abi.json
+# Then copy the contents of fdchub-abi.json and paste into MultiBaas
 ```
 
-This will:
-- Get FdcHub contract address from Flare periphery artifacts (for Coston2)
-- Register it in MultiBaas with label `FdcHub`
-- Allow your backend to call `requestAttestation()` function
+**Option B: Get ABI from Flare Docs**
+- Visit: https://dev.flare.network/fdc/reference/contracts
+- Find FdcHub ABI for Coston2
+- Copy and paste into MultiBaas
 
-**Expected output:**
-```
-✅ FdcHub registered successfully!
-   Label: FdcHub
-   Address: 0x...
-   Network: coston2
-```
+5. **Click "Save" or "Create Contract"**
 
-**If already registered:**
-```
-✅ FdcHub already registered in MultiBaas!
-```
+**Verification:**
+After registration, you should see FdcHub in your MultiBaas contracts list. The backend will now be able to call `requestAttestation()` on it.
 
 ### Step 2: Configure Environment Variables
 
@@ -74,7 +85,18 @@ FDC_SUBMITTER_WALLET=0xYourWalletAddress  # Optional, defaults to INSURER_WALLET
 - This wallet needs FLR balance for gas (same wallet used for claiming policies)
 - Set `USE_MOCK_FDC=true` to test without on-chain submission
 
-### Step 3: Test the Integration
+### Step 3: Install Dependencies
+
+Make sure the Flare periphery artifacts package is installed:
+
+```bash
+cd backend
+npm install
+```
+
+This should install `@flarenetwork/flare-periphery-contract-artifacts` which is needed for getting the FdcHub address.
+
+### Step 4: Test the Integration
 
 **Option A: Quick Test (Complete Workflow)**
 
@@ -96,7 +118,7 @@ npm run fdc:test:steps
 
 This shows detailed output for each step and is useful for debugging.
 
-### Step 4: Verify On-Chain Submission
+### Step 5: Verify On-Chain Submission
 
 After running the test, you should see:
 
@@ -212,10 +234,10 @@ USE_MOCK_FDC=false npm run fdc:test
 
 ### Error: "Contract FdcHub not found"
 
-**Solution:** Register FdcHub first:
-```bash
-npm run fdc:setup
-```
+**Solution:** Register FdcHub in MultiBaas UI first (see Step 1 above). Make sure:
+- Label is exactly `FdcHub` (case-sensitive)
+- Address is `0x52308001b46cB6b1d0E978A79e71D03996d891E6`
+- Contract is saved and visible in your MultiBaas contracts list
 
 ### Error: "Insufficient funds for gas"
 
@@ -227,7 +249,7 @@ npm run fdc:setup
 ### Error: "Transaction failed" or "Revert"
 
 **Solution:** Check:
-1. Is FdcHub registered in MultiBaas? (`npm run fdc:setup`)
+1. Is FdcHub registered in MultiBaas? (See Step 1 - manual registration)
 2. Does wallet have FLR balance?
 3. Is `abiEncodedRequest` valid? (check Step 1 output)
 4. Check MultiBaas logs for details
@@ -249,11 +271,12 @@ npm run fdc:setup
 
 ## 🎯 Next Steps
 
-1. **Register FdcHub**: `npm run fdc:setup`
-2. **Test in mock mode**: `USE_MOCK_FDC=true npm run fdc:test`
-3. **Test real mode**: `USE_MOCK_FDC=false npm run fdc:test`
-4. **Check explorer**: Verify transaction appeared on-chain
-5. **Integrate with monitoring**: Your monitoring loop should now submit on-chain!
+1. **Register FdcHub**: Follow Step 1 above to register in MultiBaas UI (one-time setup)
+2. **Install dependencies**: `cd backend && npm install`
+3. **Test in mock mode**: `USE_MOCK_FDC=true npm run fdc:test`
+4. **Test real mode**: `USE_MOCK_FDC=false npm run fdc:test`
+5. **Check explorer**: Verify transaction appeared on-chain
+6. **Integrate with monitoring**: Your monitoring loop should now submit on-chain!
 
 ## ✅ Success Criteria
 

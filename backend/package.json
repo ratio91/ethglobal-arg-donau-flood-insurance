@@ -11,7 +11,6 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "fdc:setup": "tsx scripts/register-fdchub.ts",
     "fdc:test": "tsx scripts/test-fdc-onchain.ts",
     "fdc:test:steps": "tsx scripts/test-fdc-onchain.ts --step-by-step"
   },

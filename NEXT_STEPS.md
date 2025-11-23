@@ -22,10 +22,10 @@ The FDC implementation was **NOT submitting on-chain**. It was calling a DA Laye
    - ✅ Added `USE_MOCK_FDC` for testing
    - ✅ Added `FDC_SUBMITTER_WALLET` (optional)
 
-### 4. **Created `backend/scripts/register-fdchub.ts`**
-   - ✅ One-time setup script to register FdcHub in MultiBaas
-   - ✅ Gets contract address and ABI from Flare artifacts
-   - ✅ Registers in MultiBaas for on-chain calls
+### 4. **FdcHub Registration**
+   - ✅ Documented manual registration process in MultiBaas UI
+   - ✅ Contract address: `0x52308001b46cB6b1d0E978A79e71D03996d891E6`
+   - ✅ One-time setup required before using FDC
 
 ### 5. **Created `backend/scripts/test-fdc-onchain.ts`**
    - ✅ Complete test script for FDC workflow
@@ -33,7 +33,6 @@ The FDC implementation was **NOT submitting on-chain**. It was calling a DA Laye
    - ✅ Shows transaction hash and explorer link
 
 ### 6. **Updated `backend/package.json`**
-   - ✅ Added `npm run fdc:setup` command
    - ✅ Added `npm run fdc:test` command
    - ✅ Added `npm run fdc:test:steps` command
 
@@ -50,17 +49,25 @@ cd backend
 npm install
 ```
 
-### Step 2: Register FdcHub in MultiBaas
-```bash
-npm run fdc:setup
-```
+### Step 2: Register FdcHub in MultiBaas (One-Time Setup)
 
-**Expected output:**
-```
-✅ FdcHub registered successfully!
-   Address: 0x...
-   Network: coston2
-```
+**Manually register the FdcHub contract in your MultiBaas deployment:**
+
+1. Go to MultiBaas UI → Contracts section
+2. Click "Add Contract"
+3. Enter details:
+   - **Label:** `FdcHub` (exactly this!)
+   - **Address:** `0x52308001b46cB6b1d0E978A79e71D03996d891E6`
+   - **Network:** Your Coston2 network
+4. Get ABI:
+   ```bash
+   cd backend
+   node -e "const {nameToAbi} = require('@flarenetwork/flare-periphery-contract-artifacts'); console.log(JSON.stringify(nameToAbi('FdcHub', 'coston2'), null, 2))" > fdchub-abi.json
+   ```
+   Copy `fdchub-abi.json` contents and paste into MultiBaas
+5. Save the contract
+
+**Verification:** FdcHub should appear in your MultiBaas contracts list
 
 ### Step 3: Configure Your Environment
 
@@ -171,7 +178,6 @@ backend/
 │   ├── fdc.ts                    # ✅ MAIN FIX - now submits ON-CHAIN
 │   └── config.ts                 # ✅ Added FDC config
 ├── scripts/
-│   ├── register-fdchub.ts        # ✅ NEW - Setup script
 │   └── test-fdc-onchain.ts       # ✅ NEW - Test script
 ├── .env.example                  # ✅ Updated with FDC vars
 ├── package.json                  # ✅ Added npm scripts
@@ -203,7 +209,7 @@ After following the steps above, you should have:
 ## 🐛 Troubleshooting
 
 ### "Contract FdcHub not found"
-→ Run `npm run fdc:setup` first
+→ Register FdcHub in MultiBaas UI first (see Step 2 above)
 
 ### "Insufficient funds for gas"
 → Check wallet balance has FLR
@@ -225,10 +231,11 @@ After following the steps above, you should have:
 The FDC integration is now **COMPLETE** and submits **ON-CHAIN** to the FdcHub contract!
 
 **What you need to do:**
-1. Run `npm run fdc:setup` (one-time)
-2. Test with `npm run fdc:test`
-3. Verify transaction on explorer
-4. Deploy and demo! 🚀
+1. Register FdcHub in MultiBaas UI (one-time - see Step 2 above)
+2. Run `npm install` in backend
+3. Test with `npm run fdc:test`
+4. Verify transaction on explorer
+5. Deploy and demo! 🚀
 
 ---
 
