@@ -1,28 +1,27 @@
 import { config } from './config';
-import { DataTransportObject } from './types';
 import { toHex } from './utils/hex';
 
-const FDC_BASE = config.fdc.verifierApiBase;
+const VERIFIER_API = config.fdc.verifierApiBase;
+const DA_LAYER_API = 'https://ctn2-data-availability.flare.network/api/v0/fdc';
 
 /**
- * Prepare FDC request for DORIS water level data
- * This calls the Flare verifier API to prepare an attestation request
+ * STEP 1: Prepare FDC request using Flare Verifier API
+ * This validates and encodes the attestation request
  */
 export async function prepareFdcRequest(objectID: string): Promise<string | null> {
-  // Check if mock mode is enabled
   if (process.env.USE_MOCK_FDC === 'true') {
-    console.log('⚠️  USE_MOCK_FDC=true - using mock with REAL water level data');
-    return createMockRequest(objectID);
+    console.log('⚠️  USE_MOCK_FDC=true - using mock');
+    return '0x' + 'mock'.repeat(32); // Mock request bytes
   }
 
   try {
-    console.log(`🔧 Preparing FDC request for gauge: ${objectID}`);
+    console.log(`🔧 [STEP 1] Preparing FDC request for gauge: ${objectID}`);
 
     const attestationType = toHex('Web2Json');
     const sourceId = toHex('PublicWeb2');
 
-    const url = `${FDC_BASE}/verifier/web2/Web2Json/prepareRequest`;
-    console.log('📡 Calling:', url);
+    const url = `${VERIFIER_API}/verifier/web2/Web2Json/prepareRequest`;
+    console.log('📡 Calling verifier:', url);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -50,19 +49,19 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
       }),
     });
 
-    const responseText = await response.text();
-    console.log('📡 FDC Response status:', response.status);
-    console.log('📡 FDC Response:', responseText.substring(0, 500));
+    const data = await response.json();
+    console.log('📡 Verifier response:', data.status);
 
-    if (!response.ok) {
-      console.error('❌ FDC prepare request failed');
+    if (!response.ok || data.status !== 'VALID') {
+      console.error('❌ FDC prepare failed:', data);
       return null;
     }
 
-    const data = JSON.parse(responseText);
-    console.log('✅ FDC request prepared:', data.status);
-
-    return data.response?.abiEncodedRequest || null;
+    const abiEncodedRequest = data.response?.abiEncodedRequest;
+    console.log('✅ [STEP 1] Request prepared, bytes:', abiEncodedRequest?.substring(0, 20) + '...');
+    
+    return abiEncodedRequest;
+    
   } catch (error: any) {
     console.error('❌ Failed to prepare FDC request:', error.message);
     return null;
@@ -70,40 +69,124 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
 }
 
 /**
- * Retrieve FDC proof from Flare DA Layer
- * This fetches the finalized proof after the voting round completes
+ * STEP 2: Submit prepared request to DA Layer
+ * This returns a round ID for later proof retrieval
  */
-export async function retrieveFdcProof(roundId: number, abiEncodedRequest: string): Promise<any | null> {
-  // Check if mock mode is enabled
+export async function submitFdcRequest(abiEncodedRequest: string): Promise<number | null> {
   if (process.env.USE_MOCK_FDC === 'true') {
-    console.log('⚠️  USE_MOCK_FDC=true - returning mock proof structure');
-    return createMockProof(roundId);
+    const mockRoundId = Math.floor(Date.now() / 90000);
+    console.log('⚠️  Mock submission, round ID:', mockRoundId);
+    return mockRoundId;
   }
 
   try {
-    console.log(`🔍 Retrieving FDC proof for round: ${roundId}`);
+    console.log(`📡 [STEP 2] Submitting FDC request to DA Layer...`);
+    console.log('   Request bytes:', abiEncodedRequest.substring(0, 20) + '...');
 
-    const response = await fetch(`${FDC_BASE}/verifier/web2/Web2Json/proof/${roundId}`, {
+    const url = `${DA_LAYER_API}/submit-attestation-request`;
+    console.log('📡 Calling DA Layer:', url);
+
+    const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ abiEncodedRequest }),
+      headers: { 
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        abiEncodedRequest
+      }),
     });
 
     if (!response.ok) {
-      console.log('⏳ Proof not ready yet for round', roundId);
+      const errorText = await response.text();
+      console.error('❌ DA Layer submit failed:', response.status, errorText);
       return null;
     }
 
     const data = await response.json();
+    console.log('📡 DA Layer response:', data);
 
-    if (data.status !== 'VALID' || !data.response) {
+    // Extract round ID from response
+    const roundId = data.roundId || data.votingRound;
+    
+    if (!roundId) {
+      console.error('❌ No round ID in response:', data);
+      return null;
+    }
+
+    console.log(`✅ [STEP 2] Request submitted! Round ID: ${roundId}`);
+    return roundId;
+    
+  } catch (error: any) {
+    console.error('❌ Failed to submit FDC request:', error.message);
+    return null;
+  }
+}
+
+/**
+ * STEP 3: Retrieve FDC proof from DA Layer
+ * Call this after waiting 90+ seconds from submission
+ */
+export async function retrieveFdcProof(
+  roundId: number, 
+  abiEncodedRequest: string,
+  objectID?: string
+): Promise<any | null> {
+  if (process.env.USE_MOCK_FDC === 'true') {
+    console.log('⚠️  Returning mock proof with real water level');
+    return createMockProof(roundId, objectID);
+  }
+
+  try {
+    console.log(`🔍 [STEP 3] Retrieving FDC proof for round: ${roundId}`);
+
+    // Convert request bytes to URL-safe format (remove 0x prefix)
+    const requestBytes = abiEncodedRequest.startsWith('0x') 
+      ? abiEncodedRequest.substring(2) 
+      : abiEncodedRequest;
+
+    const url = `${DA_LAYER_API}/get-attestation-proof/${roundId}/${requestBytes}`;
+    console.log('📡 Calling DA Layer:', url.substring(0, 100) + '...');
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('⏳ Proof not ready yet for round', roundId);
+      } else {
+        const errorText = await response.text();
+        console.error('❌ DA Layer error:', response.status, errorText);
+      }
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('📡 DA Layer proof response:', data.status || 'OK');
+
+    // Check if proof is valid
+    if (data.status && data.status !== 'VALID') {
       console.log('⏳ Proof not valid yet:', data.status);
       return null;
     }
 
-    console.log('✅ FDC proof retrieved successfully');
+    console.log('✅ [STEP 3] FDC proof retrieved successfully!');
 
-    return data.response;
+    // Extract water level from proof
+    if (data.data?.responseBody?.abiEncodedData) {
+      try {
+        // Decode the DTO to log water level
+        console.log('📊 Proof contains ABI encoded data');
+      } catch (e) {
+        // Decoding optional, just for logging
+      }
+    }
+
+    return data;
+    
   } catch (error: any) {
     console.error('❌ Failed to retrieve FDC proof:', error.message);
     return null;
@@ -111,39 +194,47 @@ export async function retrieveFdcProof(roundId: number, abiEncodedRequest: strin
 }
 
 /**
- * Calculate voting round ID from timestamp
- * Flare voting rounds are 90 seconds each
+ * Complete FDC workflow: Prepare → Submit → Wait → Retrieve
  */
-export function calculateRoundId(timestamp: number): number {
-  // Flare voting rounds are 90 seconds
-  const ROUND_DURATION = 90;
-  const roundId = Math.floor(timestamp / ROUND_DURATION);
-  console.log(`🔢 Calculated round ID: ${roundId} for timestamp: ${timestamp}`);
-  return roundId;
-}
+export async function completeFdcWorkflow(objectID: string): Promise<any | null> {
+  console.log('\n╔══════════════════════════════════════════╗');
+  console.log('║   🔄 Complete FDC Workflow              ║');
+  console.log('╚══════════════════════════════════════════╝\n');
 
-/**
- * Create mock FDC proof for hackathon demo
- * Structure mimics what Flare FDC would return
- */
-function createMockProof(roundId: number): any {
-  return {
-    data: {
-      attestationType: toHex('Web2Json'),
-      sourceId: toHex('PublicWeb2'),
-      votingRound: roundId,
-      lowestUsedTimestamp: Math.floor(Date.now() / 1000),
-      responseBody: {
-        height: '0x' + 'a1b2c3d4'.repeat(16), // Mock merkle root
-        data: '0xmock', // Mock ABI encoded data
-      },
-    },
-    signatures: {
-      v: [28],
-      r: ['0x' + '1234'.repeat(16)],
-      s: ['0x' + '5678'.repeat(16)],
-    },
-  };
+  try {
+    // Step 1: Prepare
+    const abiEncodedRequest = await prepareFdcRequest(objectID);
+    if (!abiEncodedRequest) {
+      throw new Error('Failed to prepare FDC request');
+    }
+
+    // Step 2: Submit
+    const roundId = await submitFdcRequest(abiEncodedRequest);
+    if (!roundId) {
+      throw new Error('Failed to submit FDC request');
+    }
+
+    console.log('\n⏳ Waiting 90 seconds for voting round to complete...\n');
+    await new Promise(resolve => setTimeout(resolve, 90000));
+
+    // Step 3: Retrieve proof
+    const proof = await retrieveFdcProof(roundId, abiEncodedRequest, objectID);
+    if (!proof) {
+      throw new Error('Failed to retrieve FDC proof');
+    }
+
+    console.log('\n✅ Complete FDC workflow successful!\n');
+    
+    return {
+      abiEncodedRequest,
+      roundId,
+      proof,
+    };
+    
+  } catch (error: any) {
+    console.error('\n❌ FDC workflow failed:', error.message, '\n');
+    return null;
+  }
 }
 
 /**

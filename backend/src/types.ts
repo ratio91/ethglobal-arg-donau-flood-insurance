@@ -29,6 +29,7 @@ export enum PolicyStatus {
  */
 export interface FdcSubmission {
   policyId: number;
+  objectID?: string; // Gauge ID for fetching water level data
   abiEncodedRequest: string;
   roundId: number;
   timestamp: number;

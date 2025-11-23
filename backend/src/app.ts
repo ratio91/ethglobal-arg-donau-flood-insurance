@@ -125,6 +125,7 @@ app.get('/submissions', async (req, res) => {
 
 /**
  * Get proof for a specific policy (for frontend settlement)
+ * IMPORTANT: Only returns hasProof=true if threshold was EXCEEDED
  */
 app.get('/api/policy/:policyId/proof', async (req, res) => {
   try {
@@ -135,11 +136,39 @@ app.get('/api/policy/:policyId/proof', async (req, res) => {
       return res.json({ hasProof: false });
     }
 
+    // Get policy details to check threshold
+    const policy = await getPolicy(policyId);
+    if (!policy) {
+      return res.json({ hasProof: false });
+    }
+
+    // Check if water level exceeded threshold
+    const waterLevel = submission.waterLevel || 0;
+    const threshold = Number(policy.waterLevelThreshold);
+    const thresholdExceeded = waterLevel > threshold;
+
+    console.log(`📊 Policy ${policyId} threshold check:`);
+    console.log(`   Water level: ${waterLevel} cm`);
+    console.log(`   Threshold: ${threshold} cm`);
+    console.log(`   Exceeded: ${thresholdExceeded}`);
+
+    // Only return proof if threshold was exceeded
+    if (!thresholdExceeded) {
+      return res.json({
+        hasProof: false,
+        waterLevel,
+        threshold,
+        thresholdExceeded: false,
+      });
+    }
+
     res.json({
       hasProof: true,
       policyId,
       proof: submission.proof,
       waterLevel: submission.waterLevel,
+      threshold,
+      thresholdExceeded: true,
       roundId: submission.roundId,
       proofTimestamp: submission.proofTimestamp,
       measureDate: submission.timestamp,
@@ -147,6 +176,72 @@ app.get('/api/policy/:policyId/proof', async (req, res) => {
   } catch (error: any) {
     console.error(`Error fetching proof for policy ${req.params.policyId}:`, error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Debug endpoint to test FDC API connectivity
+ */
+app.get('/api/test/fdc', async (req, res) => {
+  try {
+    const objectID = req.query.objectID as string || 'ATKBG00001G000619415'; // Default to Korneuburg
+
+    console.log('\n🧪 ========== TESTING FDC API ==========');
+    console.log(`Testing with gauge: ${objectID}`);
+    console.log(`USE_MOCK_FDC: ${process.env.USE_MOCK_FDC}`);
+    console.log(`FDC_VERIFIER_API_BASE: ${process.env.FDC_VERIFIER_API_BASE}`);
+
+    // Step 1: Test DORIS API
+    console.log('\n1️⃣ Testing DORIS API...');
+    const dorisResponse = await fetch(
+      'https://opendata2.doris-info.at/doris/api/1.0/gauge/getStatus?VIADONAU_PARTNER_KEY=opendata'
+    );
+    const dorisOk = dorisResponse.ok;
+    let dorisData = null;
+    if (dorisOk) {
+      const data = await dorisResponse.json();
+      const gauge = data.gaugeStatusList.find((g: any) => g.currentMeasure.objectID === objectID);
+      dorisData = gauge?.currentMeasure;
+    }
+    console.log(`   DORIS API: ${dorisOk ? '✅ OK' : '❌ FAILED'}`);
+    if (dorisData) {
+      console.log(`   Water level: ${dorisData.value} cm`);
+    }
+
+    // Step 2: Test FDC prepare request (temporarily disable mock)
+    console.log('\n2️⃣ Testing FDC prepareRequest...');
+    const originalMock = process.env.USE_MOCK_FDC;
+    process.env.USE_MOCK_FDC = 'false'; // Temporarily disable mock
+
+    const { prepareFdcRequest } = await import('./fdc');
+    const abiEncodedRequest = await prepareFdcRequest(objectID);
+
+    process.env.USE_MOCK_FDC = originalMock; // Restore
+
+    const fdcPrepareOk = abiEncodedRequest !== null;
+    console.log(`   FDC prepare: ${fdcPrepareOk ? '✅ OK' : '❌ FAILED'}`);
+
+    res.json({
+      success: true,
+      tests: {
+        doris: {
+          ok: dorisOk,
+          data: dorisData,
+        },
+        fdcPrepare: {
+          ok: fdcPrepareOk,
+          abiEncodedRequest: abiEncodedRequest?.substring(0, 100) + '...',
+        },
+      },
+      config: {
+        useMockFdc: process.env.USE_MOCK_FDC,
+        fdcVerifierBase: process.env.FDC_VERIFIER_API_BASE,
+      },
+    });
+
+  } catch (error: any) {
+    console.error('❌ FDC test error:', error);
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
@@ -256,6 +351,7 @@ export async function monitorAndSubmit() {
 
       await storage.saveSubmission({
         policyId,
+        objectID: policy.objectID, // Store gauge ID for later water level fetching
         abiEncodedRequest,
         roundId,
         timestamp,
@@ -304,8 +400,8 @@ export async function checkPendingAndSettle() {
 
       console.log('   🔍 Retrieving proof from Flare DA Layer...');
 
-      // Retrieve proof from Flare DA Layer
-      const proof = await retrieveFdcProof(submission.roundId, submission.abiEncodedRequest);
+      // Retrieve proof from Flare DA Layer (pass objectID for mock mode)
+      const proof = await retrieveFdcProof(submission.roundId, submission.abiEncodedRequest, submission.objectID);
 
       if (!proof) {
         console.log('   ❌ No proof available yet');

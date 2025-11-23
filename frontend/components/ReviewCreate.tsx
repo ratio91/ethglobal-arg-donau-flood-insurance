@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseEther } from 'viem';
 import { CONTRACT_ABI } from '@/lib/multibaas';
@@ -103,17 +103,21 @@ export default function ReviewCreate({
   };
 
   // Handle transaction confirmation
-  if (isConfirmed && !error) {
-    addLog('🎉 Transaction confirmed!');
-    addLog(`📝 Transaction hash: ${hash}`);
-    setTimeout(() => onSuccess(), 1000);
-  }
+  useEffect(() => {
+    if (isConfirmed && !error) {
+      addLog('🎉 Transaction confirmed!');
+      addLog(`📝 Transaction hash: ${hash}`);
+      setTimeout(() => onSuccess(), 1000);
+    }
+  }, [isConfirmed, error, hash]);
 
   // Handle write errors
-  if (writeError && !error) {
-    addLog(`❌ Write Error: ${writeError.message}`);
-    setError(writeError.message);
-  }
+  useEffect(() => {
+    if (writeError && !error) {
+      addLog(`❌ Write Error: ${writeError.message}`);
+      setError(writeError.message);
+    }
+  }, [writeError, error]);
 
   const endTime = new Date();
   endTime.setHours(endTime.getHours() + durationHours);
