@@ -1,6 +1,6 @@
 import { config } from './config';
 import { toHex } from './utils/hex';
-import { contractsApi } from './multibaas';
+import { contractsApi, chainsApi } from './multibaas';
 
 // ============================================================================
 // TypeScript Types (from OpenAPI spec)
@@ -217,6 +217,46 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
 }
 
 // ============================================================================
+// Helper: Extract Round ID from Events
+// ============================================================================
+
+/**
+ * Extract round ID from AttestationRequest event
+ * Event signature: AttestationRequest(bytes,uint256) where uint256 is the round ID
+ */
+function extractRoundIdFromEvents(events: any[]): number | null {
+  for (const event of events) {
+    console.log(`   Event: ${event.name || 'unnamed'}`);
+
+    if (event.name === 'AttestationRequest') {
+      console.log('   Event data:', JSON.stringify(event.data, null, 2));
+
+      // The event signature is AttestationRequest(bytes,uint256)
+      // The second parameter (index 1) is the round ID
+
+      // Try different possible data formats from MultiBaas
+      if (Array.isArray(event.data) && event.data.length >= 2) {
+        // Data as array: [requestBytes, roundId]
+        const roundId = parseInt(event.data[1]);
+        console.log(`✅ Found round ID in AttestationRequest event (array): ${roundId}`);
+        return roundId;
+      } else if (event.data && typeof event.data === 'object') {
+        // Try various possible field names
+        const possibleFields = ['roundId', 'votingRoundId', '1', 'arg1', '_votingRoundId', 'param1'];
+        for (const field of possibleFields) {
+          if (event.data[field] !== undefined) {
+            const roundId = parseInt(event.data[field]);
+            console.log(`✅ Found round ID in AttestationRequest event (${field}): ${roundId}`);
+            return roundId;
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ============================================================================
 // STEP 2: Submit FDC Request (ON-CHAIN)
 // ============================================================================
 
@@ -293,37 +333,35 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     // Event signature: AttestationRequest(bytes,uint256) where uint256 is the round ID
     let roundId: number | null = null;
 
+    // First try from immediate result events
     if (resultData.events && Array.isArray(resultData.events)) {
-      console.log('🔍 Checking transaction events for round ID...');
+      console.log('🔍 Checking immediate result events for round ID...');
+      roundId = extractRoundIdFromEvents(resultData.events);
+    }
 
-      for (const event of resultData.events) {
-        console.log(`   Event: ${event.name || 'unnamed'}`);
+    // If not found, fetch the transaction receipt
+    if (roundId === null) {
+      console.log('🔍 Fetching transaction receipt for events...');
+      try {
+        // Wait a moment for transaction to be fully processed
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-        if (event.name === 'AttestationRequest') {
-          console.log('   Event data:', JSON.stringify(event.data, null, 2));
+        // Fetch receipt from MultiBaas
+        const receiptResponse = await chainsApi.getTransactionReceipt(
+          config.multibaas.chainLabel,
+          txHash
+        );
 
-          // The event signature is AttestationRequest(bytes,uint256)
-          // The second parameter (index 1) is the round ID
+        console.log('📄 Receipt response:', JSON.stringify(receiptResponse.data, null, 2));
 
-          // Try different possible data formats from MultiBaas
-          if (Array.isArray(event.data) && event.data.length >= 2) {
-            // Data as array: [requestBytes, roundId]
-            roundId = parseInt(event.data[1]);
-            console.log(`✅ Found round ID in AttestationRequest event (array): ${roundId}`);
-            break;
-          } else if (event.data && typeof event.data === 'object') {
-            // Try various possible field names
-            const possibleFields = ['roundId', 'votingRoundId', '1', 'arg1', '_votingRoundId'];
-            for (const field of possibleFields) {
-              if (event.data[field] !== undefined) {
-                roundId = parseInt(event.data[field]);
-                console.log(`✅ Found round ID in AttestationRequest event (${field}): ${roundId}`);
-                break;
-              }
-            }
-            if (roundId !== null) break;
-          }
+        // Try to extract events from receipt
+        const receipt = receiptResponse.data.result as any;
+        if (receipt?.events && Array.isArray(receipt.events)) {
+          console.log('🔍 Checking receipt events for round ID...');
+          roundId = extractRoundIdFromEvents(receipt.events);
         }
+      } catch (receiptError: any) {
+        console.error('⚠️  Failed to fetch receipt:', receiptError.message);
       }
     }
 
