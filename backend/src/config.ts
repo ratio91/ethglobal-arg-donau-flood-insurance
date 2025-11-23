@@ -19,7 +19,8 @@ export const config = {
   fdc: {
     verifierApiBase: process.env.FDC_VERIFIER_API_BASE  || 'https://web2json-verifier-test.flare.rocks',
     apiKey: process.env.FDC_API_KEY || '', // Optional API key for verifier
-    daLayerApiBase: process.env.COSTON2_DA_LAYER_URL || 'https://ctn2-data-availability.flare.network/api/v0/fdc',
+    daLayerApiBase: process.env.COSTON2_DA_LAYER_URL || 'https://ctn2-data-availability.flare.network/api/v1/fdc',
+    daApiKey: process.env.FDC_DA_API_KEY || '00000000-0000-0000-0000-000000000000', // DA Layer API key (test key default)
     submitterWallet: process.env.FDC_SUBMITTER_WALLET, // If not set, will use insurer wallet
     requestFee: process.env.FDC_REQUEST_FEE || '25000000000000000', // 0.025 FLR in wei (Coston2)
     roundDuration: 90,

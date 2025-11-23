@@ -105,7 +105,7 @@ interface FdcWorkflowResult {
 // ============================================================================
 
 const VERIFIER_API = config.fdc.verifierApiBase;
-const DA_LAYER_API = 'https://ctn2-data-availability.flare.network/api/v0/fdc';
+const DA_LAYER_API = 'https://ctn2-data-availability.flare.network/api/v1/fdc';
 const ROUND_DURATION_SECONDS = 90;
 
 // Flare FDC voting round calculation constants
@@ -431,21 +431,36 @@ export async function retrieveFdcProof(
   try {
     console.log(`🔍 [STEP 3] Retrieving FDC proof for round: ${roundId}`);
 
-    // Convert request bytes to URL-safe format (remove 0x prefix)
+    // Ensure request bytes have 0x prefix for the API
     const requestBytes = abiEncodedRequest.startsWith('0x')
-      ? abiEncodedRequest.substring(2)
-      : abiEncodedRequest;
+      ? abiEncodedRequest
+      : '0x' + abiEncodedRequest;
 
-    const url = `${DA_LAYER_API}/get-attestation-proof/${roundId}/${requestBytes}`;
-    console.log('📡 Calling DA Layer:', url.substring(0, 120) + '...');
-    console.log('🔍 Round ID:', roundId);
+    const url = `${DA_LAYER_API}/proof-by-request-round`;
+    console.log('📡 Calling DA Layer:', url);
+    console.log('🔍 Voting Round ID:', roundId);
     console.log('🔍 Request bytes (first 40 chars):', requestBytes.substring(0, 40));
 
+    // Prepare request body according to API spec
+    const requestBody = {
+      votingRoundId: roundId,
+      requestBytes: requestBytes,
+    };
+
+    // Prepare headers with optional API key
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': 'application/json',
+    };
+
+    // Add API key if configured (defaults to test key)
+    const apiKey = config.fdc.daApiKey || '00000000-0000-0000-0000-000000000000';
+    headers['x-api-key'] = apiKey;
+
     const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
