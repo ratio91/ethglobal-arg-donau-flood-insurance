@@ -339,30 +339,12 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
       roundId = extractRoundIdFromEvents(resultData.events);
     }
 
-    // If not found, fetch the transaction receipt
+    // If not found in immediate events, skip receipt fetching for now
+    // The round ID calculation from timestamp should be accurate enough (within a few seconds)
     if (roundId === null) {
-      console.log('🔍 Fetching transaction receipt for events...');
-      try {
-        // Wait a moment for transaction to be fully processed
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Fetch receipt from MultiBaas
-        const receiptResponse = await chainsApi.getTransactionReceipt(
-          config.multibaas.chainLabel,
-          txHash
-        );
-
-        console.log('📄 Receipt response:', JSON.stringify(receiptResponse.data, null, 2));
-
-        // Try to extract events from receipt
-        const receipt = receiptResponse.data.result as any;
-        if (receipt?.events && Array.isArray(receipt.events)) {
-          console.log('🔍 Checking receipt events for round ID...');
-          roundId = extractRoundIdFromEvents(receipt.events);
-        }
-      } catch (receiptError: any) {
-        console.error('⚠️  Failed to fetch receipt:', receiptError.message);
-      }
+      console.log('⚠️  Round ID not found in immediate events');
+      console.log('   Note: Receipt fetching requires MULTIBAAS_CHAIN_LABEL env var');
+      console.log('   Falling back to calculated round ID');
     }
 
     // Fallback: calculate from timestamp if not found in events
