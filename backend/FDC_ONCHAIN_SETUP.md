@@ -76,7 +76,7 @@ INSURER_WALLET_ADDRESS=0xYourWalletAddress
 
 # FDC Configuration
 USE_MOCK_FDC=false  # Set to false for REAL on-chain submission
-FDC_VERIFIER_API_BASE=https://fdc-verifiers-testnet.flare.network
+FDC_VERIFIER_API_BASE=https://web2json-verifier-test.flare.rocks
 FDC_SUBMITTER_WALLET=0xYourWalletAddress  # Optional, defaults to INSURER_WALLET_ADDRESS
 ```
 
