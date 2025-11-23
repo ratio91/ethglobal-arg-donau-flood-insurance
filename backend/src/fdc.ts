@@ -2,10 +2,6 @@ import { config } from './config';
 import { toHex } from './utils/hex';
 import { contractsApi } from './multibaas';
 
-// FdcHub contract address on Coston2 (hardcoded for reliability)
-// Source: https://dev.flare.network/fdc/reference/contracts
-const FDCHUB_ADDRESS_COSTON2 = '0x52308001b46cB6b1d0E978A79e71D03996d891E6';
-
 // ============================================================================
 // TypeScript Types (from OpenAPI spec)
 // ============================================================================
@@ -249,9 +245,9 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     console.log('📡 [STEP 2] Submitting FDC request ON-CHAIN to FdcHub...');
     console.log('   Request bytes:', abiEncodedRequest.substring(0, 20) + '...');
 
-    // Use hardcoded FdcHub contract address for Coston2
-    const fdcHubAddress = FDCHUB_ADDRESS_COSTON2;
-    console.log('📍 FdcHub address:', fdcHubAddress);
+    // Use FdcHub contract from MultiBaas (registered with label)
+    console.log('📍 FdcHub address:', config.fdcHub.address);
+    console.log('🏷️  FdcHub label:', config.fdcHub.label);
 
     // Get wallet from config (same wallet used for claiming policies)
     const walletAddress = config.fdc.submitterWallet || config.insurer.walletAddress;
@@ -259,8 +255,8 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
 
     // Submit to FdcHub contract via MultiBaas
     const result = await contractsApi.callContractFunction(
-      fdcHubAddress,
-      'fdchub11', // Label registered in MultiBaas
+      config.fdcHub.address,
+      config.fdcHub.label,
       'requestAttestation',
       {
         args: [abiEncodedRequest],

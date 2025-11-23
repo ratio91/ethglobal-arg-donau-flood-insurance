@@ -12,6 +12,10 @@ export const config = {
     address: process.env.CONTRACT_ADDRESS!,
     chainId: parseInt(process.env.CHAIN_ID || '114'), // Actual chain ID for RPC
   },
+  fdcHub: {
+    label: process.env.FDCHUB_LABEL || 'fdchub11',
+    address: process.env.FDCHUB_ADDRESS || '0x52308001b46cB6b1d0E978A79e71D03996d891E6', // Coston2
+  },
   fdc: {
     verifierApiBase: process.env.FDC_VERIFIER_API_BASE  || 'https://web2json-verifier-test.flare.rocks',
     apiKey: process.env.FDC_API_KEY || '', // Optional API key for verifier
