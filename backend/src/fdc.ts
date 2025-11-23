@@ -204,6 +204,7 @@ export async function prepareFdcRequest(objectID: string): Promise<string | null
 
     if (data.status !== 'VALID') {
       console.error('❌ FDC prepare failed with status:', data.status);
+      console.error('   Full response:', JSON.stringify(data, null, 2));
       return null;
     }
 
