@@ -91,6 +91,7 @@ async function expirePolicyOnChain(policyId: number, policy: Policy): Promise<vo
 
     const methodArgs = {
       args: [policyId.toString()],
+      from: config.expiry.walletAddress,    // Sender address
       signer: config.expiry.walletAddress,  // Wallet address that will sign the transaction
       contractOverride: false,
       signAndSubmit: true,  // IMPORTANT: set to true to actually send TX!
