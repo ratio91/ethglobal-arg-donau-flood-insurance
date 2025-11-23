@@ -26,6 +26,11 @@ export const config = {
     autoClaimEnabled: process.env.AUTO_CLAIM_ENABLED === 'true',
     checkInterval: parseInt(process.env.INSURER_CHECK_INTERVAL_MS || '30000'),
   },
+  expiry: {
+    autoExpireEnabled: process.env.AUTO_EXPIRE_ENABLED === 'true',
+    walletAddress: process.env.EXPIRY_WALLET_ADDRESS || process.env.INSURER_WALLET_ADDRESS!, // Can use same as insurer
+    checkInterval: parseInt(process.env.MONITOR_INTERVAL_MS || '120000'),
+  },
 };
 
 // Validate required environment variables

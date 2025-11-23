@@ -4,6 +4,7 @@ import { getActivePolicies, getPolicy, resolvePolicy } from './multibaas';
 import { prepareFdcRequest, retrieveFdcProof, calculateRoundId } from './fdc';
 import { storage } from './storage';
 import { WebhookEvent } from './types';
+import { monitorAndExpirePolicies } from './expiry';
 
 export const app = express();
 app.use(express.json());
@@ -98,6 +99,19 @@ app.post('/trigger/settle', async (req, res) => {
 });
 
 /**
+ * Manual trigger for expiry check
+ */
+app.post('/trigger/expire', async (req, res) => {
+  console.log('\n🔧 Manual expiry check triggered');
+  try {
+    await monitorAndExpirePolicies();
+    res.json({ success: true, message: 'Expiry check completed' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Get all submissions (for debugging)
  */
 app.get('/submissions', async (req, res) => {
@@ -132,6 +146,53 @@ app.get('/api/policy/:policyId/proof', async (req, res) => {
     });
   } catch (error: any) {
     console.error(`Error fetching proof for policy ${req.params.policyId}:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Debug endpoint to view policy statuses and expiry information
+ */
+app.get('/api/policies/status', async (req, res) => {
+  try {
+    const activePolicyIds = await getActivePolicies();
+    const now = Math.floor(Date.now() / 1000);
+
+    const policies = [];
+    for (const policyId of activePolicyIds) {
+      const policy = await getPolicy(policyId);
+      if (!policy) continue;
+
+      // Convert bigint to number for comparison and display
+      const expirationTime = Number(policy.expirationTimestamp);
+      const isExpired = now > expirationTime;
+      const timeRemaining = expirationTime - now;
+
+      policies.push({
+        policyId,
+        objectName: policy.objectName,
+        objectID: policy.objectID,
+        status: policy.status,
+        expirationTimestamp: expirationTime,
+        expiryDate: new Date(expirationTime * 1000).toISOString(),
+        isExpired,
+        timeRemaining: isExpired ? 0 : timeRemaining,
+        timeRemainingHours: isExpired ? 0 : Math.floor(timeRemaining / 3600),
+        coverage: policy.coverage.toString(),
+        premium: policy.premium.toString(),
+        waterLevelThreshold: Number(policy.waterLevelThreshold),
+      });
+    }
+
+    res.json({
+      currentTime: now,
+      currentDate: new Date(now * 1000).toISOString(),
+      activePolicies: policies.length,
+      expiredPolicies: policies.filter(p => p.isExpired).length,
+      policies,
+    });
+
+  } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });

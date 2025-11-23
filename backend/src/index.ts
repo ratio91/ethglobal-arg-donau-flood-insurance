@@ -1,17 +1,31 @@
 import { app, monitorAndSubmit, checkPendingAndSettle } from './app';
 import { config } from './config';
 import { monitorAndClaimPolicies } from './insurer';
+import { monitorAndExpirePolicies } from './expiry';
 
 console.log('🚀 Starting Flood Insurance Backend...');
 
 /**
- * Combined monitoring cycle - runs both monitor and settle
+ * Combined monitoring cycle - runs all periodic checks
  */
 async function runMonitoringCycle() {
   console.log('\n\n🔁 ========== MONITORING CYCLE START ==========');
   console.log(`⏰ ${new Date().toISOString()}`);
 
+  // 1. Check for unclaimed policies (insurer auto-claims)
+  console.log('1️⃣ Checking for unclaimed policies...');
+  // Note: monitorAndClaimPolicies runs on its own interval
+
+  // 2. Check for expired policies (auto-expire)
+  console.log('\n2️⃣ Checking for expired policies...');
+  await monitorAndExpirePolicies();
+
+  // 3. Check water levels and store FDC proofs
+  console.log('\n3️⃣ Checking water levels...');
   await monitorAndSubmit();
+
+  // 4. Check pending submissions and settle policies
+  console.log('\n4️⃣ Checking pending settlements...');
   await checkPendingAndSettle();
 
   console.log('\n🔁 ========== MONITORING CYCLE END ==========\n');
