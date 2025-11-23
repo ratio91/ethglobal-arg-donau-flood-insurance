@@ -5,13 +5,19 @@ import { useAccount } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import PolicyCard from '@/components/PolicyCard';
+import SettlementModal from '@/components/SettlementModal';
 import { getUserPolicies, type PolicyWithLevel } from '@/lib/policies';
+import { checkProofsForPolicies, type ProofData } from '@/lib/proofs';
 
 export default function Dashboard() {
   const { address, isConnected } = useAccount();
   const router = useRouter();
   const [policies, setPolicies] = useState<PolicyWithLevel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [proofsAvailable, setProofsAvailable] = useState<Map<number, ProofData>>(new Map());
+  const [selectedPolicy, setSelectedPolicy] = useState<PolicyWithLevel | null>(null);
+  const [selectedProof, setSelectedProof] = useState<ProofData | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     if (!isConnected) {
@@ -25,10 +31,35 @@ export default function Dashboard() {
       setLoading(true);
       const userPolicies = await getUserPolicies(address);
       setPolicies(userPolicies);
+
+      // Check for available proofs for active policies
+      const activePolicyIds = userPolicies
+        .filter((p) => p.status === 1) // Status 1 = Open
+        .map((p) => p.policyId);
+
+      if (activePolicyIds.length > 0) {
+        const proofs = await checkProofsForPolicies(activePolicyIds);
+        setProofsAvailable(proofs);
+      }
+
       setLoading(false);
     }
 
     loadPolicies();
+
+    // Poll for new proofs every 30 seconds
+    const interval = setInterval(async () => {
+      const activePolicyIds = policies
+        .filter((p) => p.status === 1)
+        .map((p) => p.policyId);
+
+      if (activePolicyIds.length > 0) {
+        const proofs = await checkProofsForPolicies(activePolicyIds);
+        setProofsAvailable(proofs);
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [address, isConnected, router]);
 
   if (loading) {
@@ -96,13 +127,54 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {policies.map((policy) => (
-                <PolicyCard key={policy.policyId} policy={policy} />
-              ))}
+              {policies.map((policy) => {
+                const hasProof = proofsAvailable.has(policy.policyId);
+                const proofData = proofsAvailable.get(policy.policyId);
+
+                return (
+                  <div key={policy.policyId}>
+                    <PolicyCard policy={policy} />
+                    {hasProof && proofData && policy.status === 1 && (
+                      <button
+                        onClick={() => {
+                          setSelectedPolicy(policy);
+                          setSelectedProof(proofData);
+                          setShowModal(true);
+                        }}
+                        className="w-full mt-3 bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 transition-all animate-pulse"
+                      >
+                        🌊 Threshold Exceeded - Settle Now!
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
       </main>
+
+      {/* Settlement Modal */}
+      {selectedPolicy && selectedProof && (
+        <SettlementModal
+          policy={selectedPolicy}
+          proofData={selectedProof}
+          isOpen={showModal}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedPolicy(null);
+            setSelectedProof(null);
+          }}
+          onSuccess={async () => {
+            // Refresh policies after successful settlement
+            if (address) {
+              const userPolicies = await getUserPolicies(address);
+              setPolicies(userPolicies);
+              setProofsAvailable(new Map());
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
