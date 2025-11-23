@@ -276,6 +276,9 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
 
     const resultData = result.data.result as any;
 
+    // Log full result for debugging
+    console.log('🔍 Full result data:', JSON.stringify(resultData, null, 2));
+
     if (!resultData.tx?.hash) {
       console.error('❌ No transaction hash in result');
       console.error('   Result data:', JSON.stringify(resultData, null, 2));
@@ -287,11 +290,12 @@ export async function submitFdcRequest(abiEncodedRequest: string): Promise<numbe
     console.log('🔗 View on explorer:', `https://coston2-explorer.flare.network/tx/${txHash}`);
 
     // Calculate round ID from current timestamp
+    // TODO: Should ideally get this from the block timestamp or contract event
     const timestamp = Math.floor(Date.now() / 1000);
     const roundId = calculateRoundId(timestamp);
 
     console.log(`✅ [STEP 2] FDC request submitted on-chain!`);
-    console.log(`   Round ID: ${roundId}`);
+    console.log(`   Round ID: ${roundId} (calculated from local time)`);
     console.log(`   Transaction: ${txHash}`);
 
     return roundId;
@@ -347,7 +351,9 @@ export async function retrieveFdcProof(
       : abiEncodedRequest;
 
     const url = `${DA_LAYER_API}/get-attestation-proof/${roundId}/${requestBytes}`;
-    console.log('📡 Calling DA Layer:', url.substring(0, 100) + '...');
+    console.log('📡 Calling DA Layer:', url.substring(0, 120) + '...');
+    console.log('🔍 Round ID:', roundId);
+    console.log('🔍 Request bytes (first 40 chars):', requestBytes.substring(0, 40));
 
     const response = await fetch(url, {
       method: 'GET',
@@ -359,6 +365,7 @@ export async function retrieveFdcProof(
     if (!response.ok) {
       if (response.status === 404) {
         console.log('⏳ Proof not ready yet for round', roundId);
+        console.log('   This is normal - proofs need ~90 seconds to be available');
       } else {
         const errorText = await response.text();
         console.error('❌ DA Layer error:', response.status, errorText);
