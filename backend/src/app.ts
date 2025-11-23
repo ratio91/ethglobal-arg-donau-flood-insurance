@@ -261,8 +261,16 @@ export async function checkPendingAndSettle() {
       // Extract water level from proof
       let waterLevel = 0;
       try {
-        if (proof?.data?.responseBody?.dto?.value) {
-          waterLevel = Number(proof.data.responseBody.dto.value);
+        // Try multiple possible proof structures
+        if (proof?.data?.responseBody?.abiEncodedData) {
+          // Real FDC proof - would need ABI decoding
+          console.log('   📦 FDC proof structure detected');
+          waterLevel = 0; // TODO: Decode ABI data
+        } else if (proof?.data?.dto?.value) {
+          waterLevel = Number(proof.data.dto.value);
+          console.log(`   📊 Water level from proof: ${waterLevel} cm`);
+        } else if (proof?.dto?.value) {
+          waterLevel = Number(proof.dto.value);
           console.log(`   📊 Water level from proof: ${waterLevel} cm`);
         }
       } catch (error) {
